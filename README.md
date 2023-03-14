@@ -6,6 +6,7 @@ Tree-based memory allocator. Utilizes red-black trees.
 - alloc_descr.hpp
 - alloc_entries.hpp
 - pool_alloc.hpp
+- fix test_trb
 
 **compilation & testing**
 - page_alloc.adopt
