@@ -1,16 +1,11 @@
 #pragma once
 
-#include "cumalot_core.hpp"
-#include "cumalot_block_descr.hpp"
+#include "core.hpp"
+#include "alloc_descr.hpp"
+
+// TODO : under construction
 
 namespace cbt::mem {
-	// if we want to allocate memory we can use already existing pool and if we don't have one, we allocate one.
-	// we have burning desire to place pool storage aligned to page size (welp, we can just align it to the chunk size)
-	// so we can deal with alignment issues relatevely cheap and we don't want to waste much space in case of big chunks so... 
-	// we have to separate pool description from pool itself. But to store one block description structure would be costly... 
-	// so we will pool them too.
-	// if allocation is too big to fit into any pool, we will create separate allocation aligned to page size.
-	//
 	// now several words about pools:
 	// size = 1, alignment = 1 => pool of pools ... of byte pools
 	// size = 2,4,.., alignment = 2,4,.. => ordinary pool
@@ -82,9 +77,7 @@ namespace cbt::mem {
 
 	class pool_descr_wrapper_t {
 	public:
-		using bd_t = block_descr_t;
-
-		pool_descr_wrapper_t(bd_t* wrapped = nullptr) : descr{wrapped} {}
+		pool_descr_wrapper_t(alloc_descr_t* wrapped = nullptr) : descr{wrapped} {}
 
 		inline bool has_addr(void* addr) const {
 			return descr->has_add(addr);
@@ -148,56 +141,52 @@ namespace cbt::mem {
 			descr->head = value;
 		}
 
-		inline void set_descr(block_descr_t* value) {
+		inline void set_descr(alloc_descr_t* value) {
 			descr = value;
 		} 
 
-		inline block_descr_t* get_descr() const {
+		inline alloc_descr_t* get_descr() const {
 			return descr;
 		}
 
 	private:
-		block_descr_t* descr{};
+		alloc_descr_t* descr{};
 	};
 
-	template<bool __is_pow2>
-	class pool_ops_t;
-
-	template<>
-	class pool_ops_t<true> : pool_descr_wrapper_t {
+	class pool_ops_t : public pool_descr_wrapper_t {
 	public:
 		using base_t = pool_descr_wrapper_t;
-		using bd_t = typename base_t::bd_t;
+		using ad_t = typename base_t::ad_t;
 
 		static constexpr bool is_pow2 = true;
 
-		pool_ops_t(bd_t* descr = nullptr, attrs_t chunk_size_ = chunk_size_empty)
+		inline pool_ops_t(ad_t* descr = nullptr, attrs_t chunk_size_ = chunk_size_empty)
 			: base_t(descr), chunk_size{chunk_size_} {}
 
-		attrs_t get_chunk_size() const {
+		inline attrs_t get_chunk_size() const {
 			return pool_chunk_size<attrs_t>(chunk_size);
 		}
 
-		attrs_t get_chunk_size_enum() const {
+		inline attrs_t get_chunk_size_enum() const {
 			return chunk_size;
 		}
 
-		void* get_chunk_memory(attrs_t index) const {
+		inline void* get_chunk_memory(attrs_t index) const {
 			return (char*)base_t::get_data() + ((std::uintptr_t)index << chunk_size);
 		}
 
-		attrs_t get_chunk_index(void* chunk) const {
+		inline attrs_t get_chunk_index(void* chunk) const {
 			assert(has_chunk(chunk));
 			auto diff = (std::uintptr_t)chunk - (std::uintptr_t)base_t::get_data();
 			return (attrs_t)(diff >> (std::uintptr_t)chunk_size);
 		}
 
-		void* refine_chunk_memory(void* chunk) const {
+		inline void* refine_chunk_memory(void* chunk) const {
 			auto chunk_value = (std::uintptr_t)chunk;
 			auto data_value = (std::uintptr_t)base_t::get_data();
 			if (chunk_value < data_value) {
 				return nullptr;
-			} return (void*)(chunk_value & ((std::uintptr_t)chunk_size - 1));
+			} return (void*)(chunk_value & ((std::uintptr_t)get_chunk_size() - 1));
 		}
 
 		bool has_chunk(void* addr) const {
@@ -205,67 +194,18 @@ namespace cbt::mem {
 			auto data_value = (std::uintptr_t)base_t::get_data();
 			if (addr_value < data_value) {
 				return false;
-			} if ((addr_value & ((std::uintptr_t)chunk_size - 1)) != 0) {
+			} if ((addr_value & ((std::uintptr_t)get_chunk_size() - 1)) != 0) {
 				return false;
-			} return ((addr_value - data_value) >> chunk_size) < base_t::get_capacity();
+			} return ((addr_value - data_value) >> (std::uintptr_t)chunk_size) < base_t::get_capacity();
 		}
 		
 	private:
 		attrs_t chunk_size{};
 	};
 
-	template<>
-	class pool_ops_t<false> : public pool_descr_wrapper_t {
+	class basic_pool_ops_t : public pool_ops_t {
 	public:
-		using base_t = pool_descr_wrapper_t;
-		using bd_t = typename base_t::bd_t;
-
-		static constexpr bool is_pow2 = false;
-
-		pool_ops_t(bd_t* descr = nullptr, attrs_t chunk_size_ = chunk_size_empty)
-			: base_t(descr), chunk_size{chunk_size_} {}
-
-		attrs_t get_chunk_size() const {
-			return aux_pool_chunk_size<attrs_t>(chunk_size);
-		}
-
-		attrs_t get_chunk_size_enum() const {
-			return chunk_size;
-		}
-
-		void* get_chunk_memory(attrs_t index) const {
-			return (char*)base_t::get_data() + (std::uintptr_t)index * get_chunk_size();
-		}
-
-		attrs_t get_chunk_index(void* chunk) const {
-			assert(has_chunk(chunk));
-			auto diff = (std::uintptr_t)chunk - (std::uintptr_t)base_t::get_data();
-			return (attrs_t)(diff / (std::uintptr_t)chunk_size);
-		}
-
-		void* refine_chunk_memory(void* chunk) const {
-			auto chunk_value = (std::uintptr_t)chunk;
-			auto data_value = (std::uintptr_t)get_data();
-			if (chunk_value < data_value) {
-				return nullptr;
-			} return (void*)(chunk_value - chunk_value % (std::uintptr_t)chunk_size);
-		}
-
-		bool has_chunk(void* addr) const {
-			auto addr_value = (std::uintptr_t)addr;
-			auto data_value = (std::uintptr_t)get_data();
-			return addr_value >= data_value && addr_value % chunk_size == 0 &&
-				(addr_value - data_value) / chunk_size < base_t::get_capacity();
-		}
-
-	private:
-		attrs_t chunk_size{};
-	};
-
-	template<bool is_pow2>
-	class basic_pool_ops_t : public pool_ops_t<is_pow2> {
-	public:
-		using base_t = pool_ops_t<is_pow2>;
+		using base_t = pool_ops_t;
 
 		void* acquire_chunk() {
 			attrs_t head = base_t::get_head();
@@ -292,10 +232,9 @@ namespace cbt::mem {
 		}
 	};
 
-	template<bool is_pow2>
-	class basic_pool_wrapper_t : public basic_pool_ops_t<is_pow2> {
+	class basic_pool_wrapper_t : public basic_pool_ops_t {
 	public:
-		using base_t = basic_pool_ops_t<is_pow2>;
+		using base_t = basic_pool_ops_t;
 
 		void* acquire_chunk() {
 			void* chunk = base_t::acquire_chunk();
@@ -317,9 +256,9 @@ namespace cbt::mem {
 	class byte_pool_wrapper_t : public basic_pool_wrapper_t<true> {
 	public:
 		using base_t = basic_pool_wrapper_t<true>;
-		using bd_t = typename base_t::bd_t;
+		using ad_t = typename base_t::ad_t;
 
-		inline byte_pool_wrapper_t(bd_t* descr) : base_t(descr, type_to_chunk_size<byte_pool_t, attrs_t>()) {}
+		inline byte_pool_wrapper_t(ad_t* descr) : base_t(descr, type_to_chunk_size<byte_pool_t, attrs_t>()) {}
 
 		inline void* acquire_chunk() {
 			byte_pool_t* pool = (byte_pool_t*)base_t::peek_chunk();
@@ -360,9 +299,9 @@ namespace cbt::mem {
 
 	class raw_wrapper_t {
 	public:
-		using bd_t = block_descr_t;
+		using ad_t = alloc_descr_t;
 
-		inline raw_wrapper_t(bd_t* descr_) : descr{descr_} {}
+		inline raw_wrapper_t(ad_t* descr_) : descr{descr_} {}
 
 		inline bool has_addr(void* addr) const {
 			return descr->has_addr(addr);
@@ -376,11 +315,11 @@ namespace cbt::mem {
 			return descr->size;
 		}
 
-		inline bd_t* get_descr() const {
+		inline ad_t* get_descr() const {
 			return descr;
 		}
 
 	private:
-		block_descr_t* descr{};
+		alloc_descr_t* descr{};
 	};
 }
