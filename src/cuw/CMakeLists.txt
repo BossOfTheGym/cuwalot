@@ -20,6 +20,7 @@ set(cuw_sources ${cuw_sources}
     mem/list_cache.hpp
     mem/mem_api.hpp
     mem/page_alloc.hpp
+    mem/pool_alloc.hpp
     mem/sys_alloc.hpp
 )
 

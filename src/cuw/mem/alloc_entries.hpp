@@ -9,10 +9,10 @@
 #include "alloc_wrappers.hpp"
 
 namespace cuw::mem {
-	template<bool is_pow2, auto check_policy = pool_checks_policy_t::Default>
-	class basic_pool_entry_t : protected alloc_descr_pool_cache_t<is_pow2, check_policy> {
+	template<auto check_policy = pool_checks_policy_t::Default>
+	class basic_pool_entry_t : protected alloc_descr_pool_cache_t<check_policy> {
 	public:
-		using base_t = alloc_descr_pool_cache_t<is_pow2, check_policy>;
+		using base_t = alloc_descr_pool_cache_t<check_policy>;
 		using ad_t = alloc_descr_t;
 		using ad_addr_cache_t = alloc_descr_addr_cache_t;
 
@@ -120,18 +120,16 @@ namespace cuw::mem {
 		}
 	};
 
-	template<bool is_pow2, auto check_policy = pool_check_policy_t::Default>
-	class pool_entry_t : public basic_pool_entry_t<is_pow2, check_policy> {
+	template<auto check_policy = pool_check_policy_t::Default>
+	class pool_entry_t : public basic_pool_entry_t<check_policy> {
 	public:
-		using base_t = basic_pool_entry_t<is_pow2, check_policy>;
+		using base_t = basic_pool_entry_t<check_policy>;
 		using ad_t = typename base_t::ad_t;
 		using ad_addr_cache_t = alloc_descr_addr_cache_t;
 		using wrapper_t = basic_pool_wrapper_t<is_pow2>;
 
-		static constexpr block_type_t block_type = is_pow2 ? block_type_t::Pool : block_type_t::PoolAux;
-
 		pool_entry_t(pool_chunk_size_t chunk_size = pool_chunk_size_t::Empty)
-			: base_t{(attrs_t)chunk_size, (attrs_t)block_type} {}
+			: base_t{(attrs_t)chunk_size, (attrs_t)block_type_t::Pool} {}
 
 		void* acquire() {
 			return base_t::acquire<wrapper_t>();
@@ -212,7 +210,7 @@ namespace cuw::mem {
 
 		ad_t* release(ad_t* descr) {
 			base_t::reinsert_freed(descr);
-			return Descr;
+			return descr;
 		}
 
 		// void func(void* block, attrs_t offset, void* data, attrs_t size)

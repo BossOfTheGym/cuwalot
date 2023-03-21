@@ -9,7 +9,7 @@
 #include "alloc_entries.hpp"
 
 namespace cuw::mem {
-	using block_descr_entry_t = block_pool_entry_t;
+	using alloc_descr_entry_t = block_pool_entry_t;
 
 	namespace impl {
 		template<class basic_alloc_t, bool use_alloc_cache>
@@ -110,8 +110,8 @@ namespace cuw::mem {
 				return bins[it - it1];
 			}
 
-			void insert(bd_t* bd) {
-				find(bd->get_size())->insert(bd);
+			void insert(ad_t* ad) {
+				find(ad->get_size())->insert(ad);
 			}
 
 			void adopt(raw_bins_t& another) {
@@ -138,19 +138,17 @@ namespace cuw::mem {
 
 		using bp_t = block_pool_t;
 
-		using bd_t = block_descr_t;
-		using bd_entry_t = block_descr_entry_t;
+		using ad_t = alloc_descr_t;
+		using ad_entry_t = alloc_descr_entry_t;
 
 		static_assert(has_sysmem_alloc_tag_v<base_t>);
 
 	private:
 		using pool_bytes_t = byte_pool_entry_t<>;
 		using pool_t = pool_entry_t<>;
-		using aux_pool_t = aux_pool_entry_t<>;
 		using raw_bin_t = raw_entry_t<>;
 
 		using pools_t = impl::pools_t<pool_t, base_t::alloc_pool_first_chunk, base_t::alloc_pool_last_chunk>;
-		using aux_pools_t = impl::pools_t<aux_pool_t, base_t::alloc_aux_pool_first_chunk, base_t::alloc_aux_pool_last_chunk>;
 		using raw_bins_t = impl::raw_bins_t<raw_bin_t, base_t::alloc_raw_base_size, base_t::alloc_total_raw_bins>;
 
 	public:
@@ -161,19 +159,17 @@ namespace cuw::mem {
 		pool_alloc_t(pool_alloc_t&&) = delete;
 
 		~pool_alloc_t() {
-			bd_entry.release_all([&] (void* data, std::size_t size) {
+			ad_entry.release_all([&] (void* data, std::size_t size) {
 				base_t::free(data, size);
 			});
 
 			auto release_func = [&] (void* block, attrs_t offset, void* data, attrs_t size) {
 				base_t::free(data, size);
-				free_bd(block, offset);
+				free_descr(block, offset);
 			};
 			
 			byte_pool.release_all(addr_cache, release_func);
 			for (auto& pool : pools) {
-				pool.release_all(addr_cache, release_func);
-			} for (auto& pool : aux_pools) {
 				pool.release_all(addr_cache, release_func);
 			} for (auto& bin : raw_bins) {
 				bin.release_all(addr_cache, release_func);
@@ -186,13 +182,12 @@ namespace cuw::mem {
 		void adopt(pool_alloc_t& another) {
 			assert(this != &another);
 
-			bd_entry.adopt(another.bd_entry);
+			ad_entry.adopt(another.ad_entry);
 
 			addr_cache.adopt(another.addr_cache);
 
 			byte_pool.adopt(another.byte_pool);
 			pools.adopt(another.pools);
-			aux_pools.adopt(another.aux_pools);
 			raw_bins.adopt(another.raw_bins);
 		}
 
@@ -212,66 +207,63 @@ namespace cuw::mem {
 
 	private:
 		// returns (memory for block description, offset from primary block)
-		std::tuple<void*, attrs_t> alloc_bd() {
-			if (auto [ptr, offset] = bd_entry.acquire(); ptr) {
+		std::tuple<void*, attrs_t> alloc_descr() {
+			if (auto [ptr, offset] = ad_entry.acquire(); ptr) {
 				return {ptr, offset};
 			}
 
 			std::size_t pool_size = base_t::alloc_block_pool_size;
-			if (void* pool_mem = base_t::malloc(pool_size); pool_mem) {
-				bd_entry.create_pool(pool_mem, pool_size);
-				return bd_entry.acquire();
+			if (void* pool_mem = base_t::allocate(pool_size)) {
+				ad_entry.create_pool(pool_mem, pool_size);
+				return ad_entry.acquire();
 			} return {nullptr, head_empty};
 		}
 
 		// deallocates description, does not free associated memory
-		void free_bd(void* descr, attrs_t offset) {
-			if (bp_t* released = bd_entry.release(descr, offset); released) {
-				bd_entry.finish_release(released);
-				base_t::free(released->get_data(), released->get_size());
+		void free_descr(void* descr, attrs_t offset) {
+			if (bp_t* released = ad_entry.release(descr, offset)) {
+				ad_entry.finish_release(released);
+				base_t::deallocate(released->get_data(), released->get_size());
 			}
 		}
 
 	private:
 		template<class _pool_t>
-		void create_empty(_pool_t& pool) {
-			auto [bd, offset] = alloc_bd();
-			if (!bd) {
-				return nullptr;
+		bool create_empty(_pool_t& pool) {
+			auto [ad, offset] = alloc_descr();
+			if (!ad) {
+				return false;
 			}
 
 			auto [pool_size, pool_capacity] = pool.get_next_pool_params(base_t::alloc_min_pool_power, base_t::alloc_max_pool_power);
 
 			void* pool_data = base_t::malloc(size);
 			if (!pool_data) {
-				free_bd(bd, offset);
-				return nullptr;
+				free_descr(ad, offset);
+				return dalse;
 			}
 			
-			pool.create_empty(addr_cache, bd, offset, pool_size, pool_capacity, pool_data);
+			pool.create_empty(addr_cache, ad, offset, pool_size, pool_capacity, pool_data);
+			return true;
 		}
 
 		template<class _entry_t>
-		void finish_release(_entry_t& entry, bd_t* bd) {
-			if (bd) {
-				entry.finish_release(addr_cache, bd, [&] (void* block, attrs_t offset, void* data, attrs_t size) {
-					base_t::free(data, size);
-					free_bd(block, offset);
+		void finish_release(_entry_t& entry, ad_t* ad) {
+			if (ad) {
+				entry.finish_release(addr_cache, ad, [&] (void* block, attrs_t offset, void* data, attrs_t size) {
+					base_t::deallocate(data, size);
+					free_descr(block, offset);
 				});
 			}
 		}
 
 		template<class _pool_t>
 		void* alloc_pool(_pool_t& pool) {
-			if (void* ptr = pool.acquire(); ptr) {
+			if (void* ptr = pool.acquire()) {
 				return ptr;
-			}
-
-			create_empty(pool);
-
-			void* ptr = pool.acquire();
-			assert(ptr);
-			return ptr;
+			} if (create_empty(pool)) {
+				return pool.acquire();
+			} return nullptr;
 		}
 
 		template<class _pool_t>
@@ -280,8 +272,8 @@ namespace cuw::mem {
 		}
 
 		template<class _pool_t>
-		void free_pool(_pool_t& pool, void* ptr, bd_t* bd) {
-			finish_release(addr_cache, pool.release(ptr, bd));
+		void free_pool(_pool_t& pool, void* ptr, ad_t* ad) {
+			finish_release(addr_cache, pool.release(ptr, ad));
 		}
 
 	private:
@@ -293,8 +285,8 @@ namespace cuw::mem {
 			free_pool(byte_pool, ptr);
 		}
 
-		void free_byte(void* ptr, bd_t* bd) {
-			free_pool(byte_pool, ptr, bd);
+		void free_byte(void* ptr, ad_t* ad) {
+			free_pool(byte_pool, ptr, ad);
 		}
 
 		// allocates memory only if memory is allocated in one of the pools
@@ -351,19 +343,19 @@ namespace cuw::mem {
 		void* alloc_raw(_raw_bin_t& bin, std::size_t size, std::size_t alignment) {
 			alignment = adjust_alignment(alignment);
 
-			auto [bd, offset] = alloc_bd();
-			if (!bd) {
+			auto [ad, offset] = alloc_descr();
+			if (!ad) {
 				return nullptr;
 			}
 
 			std::size_t size_aligned = align_value(size, alignment);
 			void* data = base_t::malloc(size_aligned);
 			if (!data) {
-				free_bd(bd, offset);
+				free_descr(ad, offset);
 				return nullptr;
 			}
 
-			bin.create(addr_cache, bd, offset, size, alignment, data);
+			bin.create(addr_cache, ad, offset, size, alignment, data);
 			return data;
 		}
 
@@ -373,18 +365,18 @@ namespace cuw::mem {
 		}
 
 		template<class _raw_bin_t>
-		void free_raw(_raw_bin_t& bin, bd_t* bd) {
-			finish_release(addr_cache, bin.release(addr_cache, bd));
+		void free_raw(_raw_bin_t& bin, ad_t* ad) {
+			finish_release(addr_cache, bin.release(addr_cache, ad));
 		}
 
 		template<class _raw_bin_t>
-		bd_t* extract_raw(target_bin_t& bin, void* ptr) {
+		ad_t* extract_raw(target_bin_t& bin, void* ptr) {
 			return bin.extract(addr_cache, ptr, base_t::alloc_raw_cache_lookups);
 		}
 
 		template<class _raw_bin_t>
-		void put_back_raw(_raw_bin_t& bin, bd_t* bd) {
-			bin.put_back(addr_cache, bd);
+		void put_back_raw(_raw_bin_t& bin, ad_t* ad) {
+			bin.put_back(addr_cache, ad);
 		}
 
 		void* realloc_raw(void* old_ptr, std::size_t old_size, std::size_t alignment, std::size_t new_size) {
@@ -393,7 +385,7 @@ namespace cuw::mem {
 			auto old_bin = raw_bins.find(old_size);
 			auto new_bin = raw_bins.find(new_size);
 
-			bd_t* extracted = extract_raw(*old_bin, old_ptr);
+			ad_t* extracted = extract_raw(*old_bin, old_ptr);
 			assert(alignment == extracted->get_alignment());
 
 			std::size_t old_size_aligned = align_value(old_size, alignment);
@@ -433,32 +425,26 @@ namespace cuw::mem {
 		}
 
 		void free42(void* ptr) {
-			if (bd_t* bd = addr_cache.find(ptr); bd) {
-				free42(bd, ptr);
+			if (ad_t* ad = addr_cache.find(ptr)) {
+				free42(ad, ptr);
 			} abort();
 		}
 
-		void free42(bd_t* bd, void* ptr) {
+		void free42(ad_t* ad, void* ptr) {
 			using enum block_type_t;
 
-			switch (block_type_t{bd->get_type()}) {
+			switch (block_type_t{ad->get_type()}) {
 				case PoolBytes: {
-					free_byte(ptr, bd);
+					free_byte(ptr, ad);
 					break;
 				} case Pool: {
-					attrs_t chunk_size = pool_chunk_size<attrs_t>(bd->get_chunk_size());
+					attrs_t chunk_size = pool_chunk_size<attrs_t>(ad->get_chunk_size());
 					if (auto pool = pools.find(chunk_size); pool != pools.end()) {
-						free_pool(*pool, ptr, bd);
-						return;
-					} abort();
-				} case PoolAux: {
-					attrs_t chunk_size = aux_pool_chunk_size<attrs_t>(bd->get_chunk_size());
-					if (auto pool = aux_pools.find(chunk_size); pool != aux_pools.end()) {
-						free_pool(*pool, ptr, bd);
+						free_pool(*pool, ptr, ad);
 						return;
 					} abort();
 				} case Raw: {
-					free_raw(*raw_bins.find(bd->get_size()), bd);
+					free_raw(*raw_bins.find(ad->get_size()), ad);
 					return;
 				} default: {
 					abort();
@@ -480,29 +466,25 @@ namespace cuw::mem {
 		void* realloc42(void* old_ptr, std::size_t new_size) {
 			using enum block_type_t;
 
-			bd_t* bd = addr_cache.find(old_ptr);
-			if (!bd) {
+			ad_t* ad = addr_cache.find(old_ptr);
+			if (!ad) {
 				return nullptr;
 			}
 
 			std::size_t old_size = 0;
 			std::size_t alignment = 0;
-			switch (block_type_t{bd->get_type()}) {
+			switch (block_type_t{ad->get_type()}) {
 				case PoolBytes: {
 					old_size = 1;
 					alignment = 1;
 					break;
 				} case Pool: {
-					old_size = pool_chunk_size(bd->get_chunk_size());
-					alignment = pool_alignment(bd->get_chunk_size()); // will be adjusted further
-					break;
-				} case PoolAux: {
-					old_size = aux_pool_chunk_size(bd->get_chunk_size());
-					alignment = aux_pool_alignment(bd->get_chunk_size()); // will be adjusted further
+					old_size = pool_chunk_size(ad->get_chunk_size());
+					alignment = pool_alignment(ad->get_chunk_size()); // will be adjusted further
 					break;
 				} case Raw: {
-					old_size = bd->get_size();
-					alignment = bd->get_alignment(); // will be adjusted further
+					old_size = ad->get_size();
+					alignment = ad->get_alignment(); // will be adjusted further
 					break;
 				} default: {
 					abort();
@@ -624,7 +606,7 @@ namespace cuw::mem {
 		}
 
 	private:
-		bd_entry_t bd_entry{};
+		ad_entry_t ad_entry{};
 
 		addr_cache_t addr_cache{}; // common addr cache for all allocations
 

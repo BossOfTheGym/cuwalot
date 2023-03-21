@@ -153,12 +153,11 @@ namespace cbt::mem {
 		alloc_descr_t* descr{};
 	};
 
+	// pool_chunk is power of two
 	class pool_ops_t : public pool_descr_wrapper_t {
 	public:
 		using base_t = pool_descr_wrapper_t;
 		using ad_t = typename base_t::ad_t;
-
-		static constexpr bool is_pow2 = true;
 
 		inline pool_ops_t(ad_t* descr = nullptr, attrs_t chunk_size_ = chunk_size_empty)
 			: base_t(descr), chunk_size{chunk_size_} {}
@@ -189,7 +188,7 @@ namespace cbt::mem {
 			} return (void*)(chunk_value & ((std::uintptr_t)get_chunk_size() - 1));
 		}
 
-		bool has_chunk(void* addr) const {
+		inline bool has_chunk(void* addr) const {
 			auto addr_value = (std::uintptr_t)addr;
 			auto data_value = (std::uintptr_t)base_t::get_data();
 			if (addr_value < data_value) {
@@ -207,7 +206,7 @@ namespace cbt::mem {
 	public:
 		using base_t = pool_ops_t;
 
-		void* acquire_chunk() {
+		inline void* acquire_chunk() {
 			attrs_t head = base_t::get_head();
 			if (head != head_empty) {
 				void* chunk = base_t::get_chunk_memory(head);
@@ -218,14 +217,14 @@ namespace cbt::mem {
 			} return nullptr; // no more chunks
 		}
 
-		void* peek_chunk() const {
+		inline void* peek_chunk() const {
 			attrs_t head = base_t::get_head();
 			if (head != head_empty) {
 				return base_t::get_chunk_memory(head);
 			} return nullptr;
 		}
 
-		void release_chunk(void* chunk) {
+		inline void release_chunk(void* chunk) {
 			assert(base_t::has_chunk(chunk));
 			((pool_hdr_t*)chunk)->next = base_t::get_head();
 			base_t::set_head(base_t::get_chunk_index(chunk));
@@ -236,26 +235,24 @@ namespace cbt::mem {
 	public:
 		using base_t = basic_pool_ops_t;
 
-		void* acquire_chunk() {
+		inline void* acquire_chunk() {
 			void* chunk = base_t::acquire_chunk();
 			if (chunk) {
 				base_t::inc_count();
 			} return chunk;
 		}
 
-		void release_chunk(void* chunk) {
+		inline void release_chunk(void* chunk) {
 			base_t::release_chunk(chunk);
 			base_t::dec_count();
 		}
 	};
 
-	class pool_wrapper_t : public basic_pool_wrapper_t<true> {};
+	using pool_wrapper_t = basic_pool_wrapper_t;
 
-	class aux_pool_wrapper_t : public basic_pool_wrapper_t<false> {};
-
-	class byte_pool_wrapper_t : public basic_pool_wrapper_t<true> {
+	class byte_pool_wrapper_t : public basic_pool_wrapper_t {
 	public:
-		using base_t = basic_pool_wrapper_t<true>;
+		using base_t = basic_pool_wrapper_t;
 		using ad_t = typename base_t::ad_t;
 
 		inline byte_pool_wrapper_t(ad_t* descr) : base_t(descr, type_to_chunk_size<byte_pool_t, attrs_t>()) {}
@@ -272,15 +269,13 @@ namespace cbt::mem {
 		}
 
 		inline void* peek_chunk() const {
-			byte_pool_t* pool = (byte_pool_t*)base_t::peek_chunk();
-			if (pool) {
+			if (byte_pool_t* pool = (byte_pool_t*)base_t::peek_chunk()) {
 				return pool->peek_chunk();
 			} return nullptr;
 		}
 
 		inline void release_chunk(void* chunk) {
-			byte_pool_t* pool = (byte_pool_t*)base_t::refine_chunk_memory(chunk);
-			if (pool) {
+			if (byte_pool_t* pool = (byte_pool_t*)base_t::refine_chunk_memory(chunk)) {
 				pool->release_chunk(chunk);
 				if (pool->empty()) {
 					base_t::release_chunk(chunk);
@@ -290,8 +285,7 @@ namespace cbt::mem {
 		}
 
 		inline bool has_chunk(void* chunk) const {
-			byte_pool_t* pool = (byte_pool_t*)base_t::refine_chunk_memory(chunk);
-			if (pool) {
+			if (byte_pool_t* pool = (byte_pool_t*)base_t::refine_chunk_memory(chunk)) {
 				return pool->has_chunk(chunk);
 			} return false;
 		}

@@ -216,61 +216,27 @@ namespace cuw::mem {
 		addr_index_t* index{};
 	};
 
-	template<bool is_pow2>
-	class pool_entry_ops_t;
 
-	template<>
-	class pool_entry_ops_t<true> {
+	class pool_entry_ops_t {
 	public:
-		static constexpr bool is_pow2 = true;
-
 		// size, capacity
-		std::tuple<attrs_t, attrs_t> get_next_pool_params(attrs_t pools, attrs_t min_pools, attrs max_pools) const {
+		inline std::tuple<attrs_t, attrs_t> get_next_pool_params(attrs_t pools, attrs_t min_pools, attrs max_pools) const {
 			pools = std::clamp(pools, min_pools, max_pools);
 			attrs_t size = (attrs_t)1 << pools;
 			attrs_t capacity = std::min(size >> chunk_size, max_pool_chunks);
 			return {capacity << chunk_size, capacity};
 		}
 
-		attrs_t get_chunk_size() const {
+		inline attrs_t get_chunk_size() const {
 			return pool_chunk_size(chunk_size);
 		}
 
-		attrs_t get_chunk_size_enum() const {
+		inline attrs_t get_chunk_size_enum() const {
 			return chunk_size;
 		}
 
-		attrs_t get_max_alignment() const {
+		inline attrs_t get_max_alignment() const {
 			return pool_alignment<attrs_t>(chunk_size);
-		}
-
-	private:
-		attrs_t chunk_size{};
-	};
-
-	template<>
-	class pool_entry_ops_t<false> {
-	public:
-		static constexpr bool is_pow2 = false;
-
-		// size, capacity
-		std::tuple<attrs_t, attrs_t> get_next_pool_params(attrs_t pools, attrs_t min_pools, attrs_t max_pools) const {
-			pools = std::clamp(pools, min_pools, max_pools);
-			attrs_t size = (attrs_t)1 << pools;
-			attrs_t capacity = std::min(size / get_chunk_size(), max_pool_chunks);
-			return {capacity * get_chunk_size(), capacity};
-		}
-
-		attrs_t get_chunk_size() const {
-			return aux_pool_chunk_size(chunk_size);
-		}
-
-		attrs_t get_chunk_size_enum() const {
-			return chunk_size;
-		}
-
-		attrs_t get_max_alignemnt() const {
-			return aux_pool_alignment<attrs_t>(chunk_size);
 		}
 
 	private:
@@ -310,12 +276,12 @@ namespace cuw::mem {
 	// type: block_type_t value, must be pool-like
 	// free_cache: list of description blocks (pools) that have free chunks
 	// full_cache: list of description blocks (pools) that have no free chunks
-	template<bool is_pow2, pool_checks_policy_t check_policy>
+	template<pool_checks_policy_t check_policy>
 	class alloc_descr_pool_cache_t 
-		: public pool_entry_ops_t<is_pow2>
+		: public pool_entry_ops_t
 		, public check_descr_t<basic_pool_entry_t, check_policy> {
 	public:
-		using ops_t = pool_entry_ops_t<is_pow2>;
+		using ops_t = pool_entry_ops_t;
 		using check_t = check_descr_t<basic_pool_entry_t, check_policy>;
 		using ad_t = alloc_descr_t;
 		using ad_cache_t = alloc_descr_cache_t;
