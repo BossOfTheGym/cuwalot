@@ -18,7 +18,7 @@
 #include <cuw/utils/trb.hpp>
 #include <cuw/utils/trb_node.hpp>
 
-// TODO : under construction (I removed header containing pool..)
+#include "pool.hpp"
 
 using namespace cuw;
 
@@ -71,7 +71,7 @@ public:
 
 class pooled_tree_storage_t {
 public:
-	using node_pool_t = fixed::pool_storage_t<node_t, max_nodes>;
+	using node_pool_t = pool_storage_t<node_t, max_nodes>;
 
 	pooled_tree_storage_t() {
 		pool = std::make_unique<node_pool_t>();
@@ -100,7 +100,7 @@ public:
 	}
 
 	void insert(int key) {
-		auto alloc_wrapper = [&](auto&& ... args) { return storage.emplace(std::forward<decltype(args)>(args)...); };
+		auto alloc_wrapper = [&] (auto&& ... args) { return storage.emplace(std::forward<decltype(args)>(args)...); };
 
 		node_t* node = trb::alloc_node<node_t>(alloc_wrapper, key);
 		if (node) {
