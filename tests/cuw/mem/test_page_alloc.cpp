@@ -256,15 +256,75 @@ namespace {
 	}
 
 	int test_adopt_advanced() {
-		// std::cout << "testing adoption(advanced)" << std::endl;
+		std::cout << "testing adoption(advanced)" << std::endl;
+		
+		using common_alloc_t = basic_alloc_t<4, 1, 2>;
+		using seq_alloc_t = scenario_alloc_t<common_alloc_t>;
+		using proxy_alloc_t = dummy_alloc_proxy_t<seq_alloc_t>;
+		using alloc_t = mem::page_alloc_t<proxy_alloc_t>;
 
-		// using alloc_t = scenario_alloc_t<basic_alloc_t<4, 1, 2>>;
-		// using proxy_alloc_t = dummy_alloc_proxy_t<basic_scenario_alloc_t>;
-		// using page_alloc_t = mem::page_alloc_t<proxy_alloc_t>;
+		// uuuuuuuuuuuuuuuuuu
+		common_alloc_t common_alloc(block_size_t{18}, block_size_t{1});
 
-		// // TODO
+		void* dummy{};
+		void* start = common_alloc.get_alloc_ranges().begin()->ptr;
 
-		// std::cout << "adoption test successfully finished" << std::endl;
+		seq_alloc_t proxy(common_alloc, request_stack_t({
+			alloc_request_t::allocate(block_size_t{6}, block_mem_t{start, +0}),
+			alloc_request_t::allocate(block_size_t{2}, block_mem_t{start, +8}),
+			alloc_request_t::allocate(block_size_t{6}, block_mem_t{start, +10}),
+			alloc_request_t::allocate(block_size_t{2}, block_mem_t{start, +16}),
+			alloc_request_t::allocate(block_size_t{2}, block_mem_t{start, +6}),
+		}));
+
+		alloc_t alloc1(proxy), alloc2(proxy);
+
+		// f000--uuuuuuuuuuuu -> -1
+		dummy = alloc1.allocate(block_size_t{2});
+		memset(dummy, 0x1, block_size_t{2});
+		check_allocation(dummy, block_mem_t{start, +4});
+
+		// f000--uu--uuuuuuuu -> -1
+		dummy = alloc1.allocate(block_size_t{2});
+		memset(dummy, 0x1, block_size_t{2});
+		check_allocation(dummy, block_mem_t{start, +8});
+
+		// f000--uu--f000--uu -> -2
+		dummy = alloc2.allocate(block_size_t{2});
+		memset(dummy, 0x2, block_size_t{2});
+		check_allocation(dummy, block_mem_t{start, +14});
+
+		// f100--uu--f000++uu -> +1
+		alloc1.deallocate(block_mem_t{start, +14}, block_size_t{2});
+
+		// f100--uu--f000++-- -> -2
+		dummy = alloc2.allocate(block_size_t{2});
+		memset(dummy, 0x2, block_size_t{2});
+		check_allocation(dummy, block_mem_t{start, +16});
+
+		// f100------f000++-- -> -2
+		dummy = alloc2.allocate(block_size_t{2});
+		memset(dummy, 0x2, block_size_t{2});
+		check_allocation(dummy, block_mem_t{start, +6});
+
+		// f110++----f000++-- -> +1
+		alloc1.deallocate(block_mem_t{start, +4}, block_size_t{2});
+
+		// f111++--++f000++-- -> +1
+		alloc1.deallocate(block_mem_t{start, +8}, block_size_t{2});
+
+		// f111++++++f100++-- -> +2
+		alloc2.deallocate(block_mem_t{start, +6}, block_size_t{2});
+
+		// f000++++++f110++++ -> +2
+		alloc2.deallocate(block_mem_t{start, +16}, block_size_t{2});
+
+		// f100++++++++++++++ -> 1 = 1 + 2
+		alloc1.adopt(alloc2);
+		alloc1.release_mem();
+
+		std::cout << "final state: " << std::endl << block_view_t{start, 18} << std::endl;
+		std::cout << "adoption test(advanced) successfully finished" << std::endl;
 
 		return 0;
 	}
@@ -281,6 +341,8 @@ int main(int argc, char* argv[]) {
 	} if (test_realloc()) {
 		return -1;
 	} if (test_adopt()) {
+		return -1;
+	} if (test_adopt_advanced()) {
 		return -1;
 	} if (test_random_stuff()) {
 		return -1;

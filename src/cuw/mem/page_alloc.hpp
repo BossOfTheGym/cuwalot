@@ -116,7 +116,7 @@ namespace cuw::mem {
 	// size is now size in bytes
 	// size cannot be less than page_size or block_align
 	// main feature of this allocator: less than wasted byte for each allocated byte
-	// and O(6 * log(n)) complexity at its finest
+	// and O(7 * log(n)) complexity at its finest
 	template<class basic_alloc_t>
 	class page_alloc_t : public basic_alloc_t {
 	public:
@@ -285,6 +285,8 @@ namespace cuw::mem {
 				fbd_t* fbd = fbd_t::addr_index_to_descr(addr_index);
 				base_t::deallocate(fbd->data, fbd->size);
 			});
+			free_blocks_addr = nullptr;
+			free_blocks_size = nullptr;
 			fbd_entry.release_all([&] (void* block, std::size_t size) {
 				base_t::deallocate(block, size);
 				return true;

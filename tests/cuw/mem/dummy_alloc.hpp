@@ -197,7 +197,7 @@ public:
 			} return e;
 		})();
 		if (it == ranges.end()) {
-			std::cout << "error: range was not not found" << std::endl;
+			std::cout << "error: range was not found" << std::endl;
 			return nullptr;
 		}
 
