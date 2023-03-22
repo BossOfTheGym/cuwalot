@@ -5,7 +5,7 @@
 
 // TODO : under construction
 
-namespace cbt::mem {
+namespace cuw::mem {
 	// now several words about pools:
 	// size = 1, alignment = 1 => pool of pools ... of byte pools
 	// size = 2,4,.., alignment = 2,4,.. => ordinary pool
@@ -75,94 +75,14 @@ namespace cbt::mem {
 		std::uint8_t chunks[max_chunks];
 	};
 
-	class pool_descr_wrapper_t {
+	// pool_chunk is power of two
+	class pool_ops_t : public alloc_descr_wrapper_t {
 	public:
+		using base_t = alloc_descr_wrapper_t;
 		using ad_t = alloc_descr_t;
 
-		pool_descr_wrapper_t(ad_t* _descr = nullptr) : descr{_descr} {}
-
-		inline bool has_addr(void* addr) const {
-			return descr->has_add(addr);
-		}
-
-		inline bool empty() const {
-			return descr->count == 0;
-		}
-
-		inline bool full() const {
-			return descr->count == descr->capacity;
-		}
-
-		inline bool has_capacity() const {
-			return descr->used < descr->capacity;
-		}
-
-
-		inline attrs_t get_capacity() const {
-			return descr->capacity;
-		}
-
-		inline attrs_t get_used() const {
-			return descr->used;
-		}
-
-		inline atrts_t get_count() const {
-			return descr->count;
-		}
-
-		inline attrs_t get_head() const {
-			return descr->head;
-		}
-
-		inline void* get_data() const {
-			return descr->data;
-		}
-
-		inline attrs_t get_size() const {
-			return descr->size;
-		}
-
-
-		inline attrs_t inc_used() {
-			return descr->used++;
-		}
-
-		inline attrs_t dec_used() {
-			return descr->used--;
-		}
-
-		inline attrs_t inc_count() {
-			return descr->count++;
-		}
-
-		inline attrs_t dec_count() {
-			return descr->count--;
-		}
-
-		inline void set_head(attrs_t value) {
-			descr->head = value;
-		}
-
-		inline void set_descr(ad_t* value) {
-			descr = value;
-		} 
-
-		inline ad_t* get_descr() const {
-			return descr;
-		}
-
-	private:
-		ad_t* descr{};
-	};
-
-	// pool_chunk is power of two
-	class pool_ops_t : public pool_descr_wrapper_t {
-	public:
-		using base_t = pool_descr_wrapper_t;
-		using ad_t = typename base_t::ad_t;
-
-		inline pool_ops_t(ad_t* descr = nullptr, attrs_t chunk_size_ = chunk_size_empty)
-			: base_t(descr), chunk_size{chunk_size_} {}
+		inline pool_ops_t(ad_t* descr = nullptr, attrs_t _chunk_size = chunk_size_empty)
+			: base_t(descr), chunk_size{_chunk_size} {}
 
 		inline attrs_t get_chunk_size() const {
 			return pool_chunk_size<attrs_t>(chunk_size);
@@ -207,9 +127,10 @@ namespace cbt::mem {
 	class basic_pool_ops_t : public pool_ops_t {
 	public:
 		using base_t = pool_ops_t;
-
+		using base_t::base_t;
+		
 		inline void* acquire_chunk() {
-			if (attrs_t head = base_t::get_head(); head != head_empty) {
+			if (attrs_t head = base_t::get_head(); head != alloc_descr_head_empty) {
 				void* chunk = base_t::get_chunk_memory(head);
 				base_t::set_head(((pool_hdr_t*)chunk)->next);
 				return chunk;
@@ -219,7 +140,7 @@ namespace cbt::mem {
 		}
 
 		inline void* peek_chunk() const {
-			if (attrs_t head = base_t::get_head(); head != head_empty) {
+			if (attrs_t head = base_t::get_head(); head != alloc_descr_head_empty) {
 				return base_t::get_chunk_memory(head);
 			} return nullptr;
 		}
@@ -234,6 +155,7 @@ namespace cbt::mem {
 	class basic_pool_wrapper_t : public basic_pool_ops_t {
 	public:
 		using base_t = basic_pool_ops_t;
+		using base_t::base_t;
 
 		inline void* acquire_chunk() {
 			void* chunk = base_t::acquire_chunk();
@@ -253,9 +175,9 @@ namespace cbt::mem {
 	class byte_pool_wrapper_t : public basic_pool_wrapper_t {
 	public:
 		using base_t = basic_pool_wrapper_t;
-		using ad_t = typename base_t::ad_t;
+		using ad_t = alloc_descr_t;
 
-		inline byte_pool_wrapper_t(ad_t* descr) : base_t(descr, type_to_chunk_size<byte_pool_t, attrs_t>()) {}
+		inline byte_pool_wrapper_t(ad_t* descr) : base_t(descr, type_to_pool_chunk<byte_pool_t, attrs_t>()) {}
 
 		inline void* acquire_chunk() {
 			if (byte_pool_t* pool = (byte_pool_t*)base_t::peek_chunk()) {

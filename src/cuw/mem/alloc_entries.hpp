@@ -39,7 +39,7 @@ namespace cuw::mem {
 			ad_t* descr = new (block) ad_t {
 				.offset = offset, .size = size,
 				.type = base_t::get_type(), .chunk_size = base_t::get_chunk_size_enum(),
-				.capacity = capacity, .head = head_empty,
+				.capacity = capacity, .head = alloc_descr_head_empty,
 				.data = data,
 			};
 			base_t::insert_empty(descr);
@@ -71,7 +71,7 @@ namespace cuw::mem {
 		}
 
 		template<class wrapper_t>
-		void release(void* ptr, ad_t* descr) {
+		ad_t* release(void* ptr, ad_t* descr) {
 			wrapper_t pool(descr, base_t::get_chunk_size_enum());
 			assert(!pool.empty());
 
@@ -120,50 +120,50 @@ namespace cuw::mem {
 		}
 	};
 
-	template<auto check_policy = pool_check_policy_t::Default>
+	template<auto check_policy = pool_checks_policy_t::Default>
 	class pool_entry_t : public basic_pool_entry_t<check_policy> {
 	public:
 		using base_t = basic_pool_entry_t<check_policy>;
-		using ad_t = typename base_t::ad_t;
+		using ad_t = alloc_descr_t;
 		using ad_addr_cache_t = alloc_descr_addr_cache_t;
-		using wrapper_t = basic_pool_wrapper_t<is_pow2>;
+		using wrapper_t = basic_pool_wrapper_t;
 
 		pool_entry_t(pool_chunk_size_t chunk_size = pool_chunk_size_t::Empty)
 			: base_t{(attrs_t)chunk_size, (attrs_t)block_type_t::Pool} {}
 
 		void* acquire() {
-			return base_t::acquire<wrapper_t>();
+			return base_t::template acquire<wrapper_t>();
 		}
 
 		ad_t* release(const ad_addr_cache_t& addr_cache, void* ptr, int cache_lookups) {
-			return base_t::release<wrapper_t>(addr_cache, ptr, cache_lookups);
+			return base_t::template release<wrapper_t>(addr_cache, ptr, cache_lookups);
 		}
 
 		ad_t* release(void* ptr, ad_t* descr) {
-			return base_t::release<wrapper_t>(ptr, descr);
+			return base_t::template release<wrapper_t>(ptr, descr);
 		}
 	};
 
-	template<auto check_policy = pool_check_policy_t::Default>
-	class byte_pool_entry_t : public basic_pool_entry_t<true, check_policy> {
+	template<auto check_policy = pool_checks_policy_t::Default>
+	class byte_pool_entry_t : public basic_pool_entry_t<check_policy> {
 	public:
-		using base_t = basic_pool_entry_t<true, check_policy>;
-		using ad_t = typename base_t::ad_t;
+		using base_t = basic_pool_entry_t<check_policy>;
+		using ad_t = alloc_descr_t;
 		using ad_addr_cache_t = alloc_descr_addr_cache_t;
 		using wrapper_t = byte_pool_wrapper_t;
 
 		byte_pool_entry_t() : base_t{type_to_pool_chunk<byte_pool_t, attrs_t>(), (attrs_t)block_type_t::PoolBytes} {}
 
 		void* acquire() {
-			return base_t::acquire<wrapper_t>();
+			return base_t::template acquire<wrapper_t>();
 		}
 
 		ad_t* release(const ad_addr_cache_t& addr_cache, void* ptr, int cache_lookups) {
-			base_t::release<wrapper_t>(addr_cache, ptr, cache_lookups);
+			return base_t::template release<wrapper_t>(addr_cache, ptr, cache_lookups);
 		}
 
 		ad_t* release(void* ptr, ad_t* descr) {
-			base_t::release<wrapper_t>(ptr, descr);
+			return base_t::template release<wrapper_t>(ptr, descr);
 		}
 	};
 

@@ -4,6 +4,7 @@
 // TODO : rename to alloc_descr_t as it is more appropriate name
 
 #include "core.hpp"
+#include "list_cache.hpp"
 
 namespace cuw::mem {
 	using alloc_descr_list_t = list_entry_t;
@@ -30,13 +31,11 @@ namespace cuw::mem {
 	struct alignas(block_align) alloc_descr_t {
 		using ad_t = alloc_descr_t;
 
-		static_assert(sizeof(ad_t) == block_align);
-
 		inline static ad_t* addr_index_to_descr(addr_index_t* addr) {
 			return base_to_obj(addr, ad_t, addr_index);
 		}
 
-		inline static ad_t* list_entry_to_descr(descr_list_t* list) {
+		inline static ad_t* list_entry_to_descr(alloc_descr_list_t* list) {
 			return base_to_obj(list, ad_t, list_entry);
 		}
 
@@ -63,10 +62,6 @@ namespace cuw::mem {
 		};
 
 
-		inline attrs_t get_offset() const {
-			return offset;
-		}
-
 		inline attrs_t get_type() const {
 			return type;
 		}
@@ -88,7 +83,7 @@ namespace cuw::mem {
 		}
 
 		// only valid for raw allocation (well, also for pool)
-		inline atrts_t get_alignment() const {
+		inline attrs_t get_alignment() const {
 			return pool_chunk_size(chunk_size);
 		}
 
@@ -119,7 +114,7 @@ namespace cuw::mem {
 		}
 
 		inline void* block_end() const {
-			return (void*)((std::uintptr_t)data + block_size())
+			return (void*)((std::uintptr_t)data + get_size());
 		}
 
 		addr_index_t addr_index;
@@ -127,6 +122,88 @@ namespace cuw::mem {
 		attrs_t offset:16, size:48;
 		attrs_t type:3, chunk_size:5, capacity:14, used:14, count:14, head:14;
 		void* data;
+	};
+
+	static_assert(sizeof(alloc_descr_t) == block_align);
+
+	class alloc_descr_wrapper_t {
+	public:
+		using ad_t = alloc_descr_t;
+
+		alloc_descr_wrapper_t(ad_t* _descr = nullptr) : descr{_descr} {}
+
+		inline bool has_addr(void* addr) const {
+			return descr->has_addr(addr);
+		}
+
+		inline bool empty() const {
+			return descr->count == 0;
+		}
+
+		inline bool full() const {
+			return descr->count == descr->capacity;
+		}
+
+		inline bool has_capacity() const {
+			return descr->used < descr->capacity;
+		}
+
+
+		inline attrs_t get_capacity() const {
+			return descr->capacity;
+		}
+
+		inline attrs_t get_used() const {
+			return descr->used;
+		}
+
+		inline attrs_t get_count() const {
+			return descr->count;
+		}
+
+		inline attrs_t get_head() const {
+			return descr->head;
+		}
+
+		inline void* get_data() const {
+			return descr->data;
+		}
+
+		inline attrs_t get_size() const {
+			return descr->size;
+		}
+
+
+		inline attrs_t inc_used() {
+			return descr->used++;
+		}
+
+		inline attrs_t dec_used() {
+			return descr->used--;
+		}
+
+		inline attrs_t inc_count() {
+			return descr->count++;
+		}
+
+		inline attrs_t dec_count() {
+			return descr->count--;
+		}
+
+		inline void set_head(attrs_t value) {
+			descr->head = value;
+		}
+
+		inline void set_descr(ad_t* value) {
+			descr = value;
+		} 
+
+		inline ad_t* get_descr() const {
+			return descr;
+		}
+
+	private:
+		ad_t* descr{};
 	};
 
 	using basic_alloc_descr_cache_t = list_cache_t<alloc_descr_list_t>;
@@ -150,12 +227,12 @@ namespace cuw::mem {
 		}
 
 		inline ad_t* peek() const {
-			if (adl_t* adl = base_t::peek();) {
+			if (adl_t* adl = base_t::peek()) {
 				return ad_t::list_entry_to_descr(adl);
 			} return nullptr;
 		}
 
-		inline ad_t* find(void* addr, int max_lookups) const {
+		inline ad_t* find(void* addr, int max_lookups) {
 			auto curr = base_t::begin();
 			auto head = base_t::end();
 			for (int i = 0; curr != head && i < max_lookups; i++, curr++) {
@@ -194,7 +271,7 @@ namespace cuw::mem {
 		}
 
 		inline void erase(ad_t* descr) {
-			index = trb::remove(index, &descr->addr_index, ad_t::addr_ops_t{});
+			index = trb::remove(index, &descr->addr_index);
 		}
 
 		inline ad_t* find(void* addr) const {
@@ -205,7 +282,7 @@ namespace cuw::mem {
 			} return nullptr;
 		}
 
-		inline void adopt(addr_cache_t& another) {
+		inline void adopt(alloc_descr_addr_cache_t& another) {
 			bst::traverse_inorder(another.index, [&] (addr_index_t* addr) {
 				index = trb::insert_lb(index, addr, ad_t::addr_ops_t{});
 			});
@@ -220,7 +297,7 @@ namespace cuw::mem {
 	class pool_entry_ops_t {
 	public:
 		// size, capacity
-		inline std::tuple<attrs_t, attrs_t> get_next_pool_params(attrs_t pools, attrs_t min_pools, attrs max_pools) const {
+		inline std::tuple<attrs_t, attrs_t> get_next_pool_params(attrs_t pools, attrs_t min_pools, attrs_t max_pools) const {
 			pools = std::clamp(pools, min_pools, max_pools);
 			attrs_t size = (attrs_t)1 << pools;
 			attrs_t capacity = std::min(size >> chunk_size, max_pool_chunks);
@@ -253,7 +330,7 @@ namespace cuw::mem {
 		static constexpr pool_checks_policy_t check_policy = __check_policy;
 
 		using host_t = __host_t;
-		using ad_t = typename host_t::alloc_descr_t;
+		using ad_t = alloc_descr_t;
 
 		bool check_descr(ad_t* descr) const {
 			assert(descr);
@@ -279,10 +356,10 @@ namespace cuw::mem {
 	template<pool_checks_policy_t check_policy>
 	class alloc_descr_pool_cache_t 
 		: public pool_entry_ops_t
-		, public check_descr_t<basic_pool_entry_t, check_policy> {
+		, public pool_checks_t<alloc_descr_pool_cache_t<check_policy>, check_policy> {
 	public:
 		using ops_t = pool_entry_ops_t;
-		using check_t = check_descr_t<basic_pool_entry_t, check_policy>;
+		using check_t = pool_checks_t<alloc_descr_pool_cache_t<check_policy>, check_policy>;
 		using ad_t = alloc_descr_t;
 		using ad_cache_t = alloc_descr_cache_t;
 
@@ -335,8 +412,8 @@ namespace cuw::mem {
 		}
 
 
-		void insert(ad_t* decsr) {
-			pool_descr_wrapper_t pool{descr};
+		void insert(ad_t* descr) {
+			alloc_descr_wrapper_t pool{descr};
 			if (pool.empty()) {
 				insert_empty(descr);
 			} if (pool.full()) {
@@ -348,7 +425,7 @@ namespace cuw::mem {
 			if (!check_t::check_descr(descr)) {
 				return;
 			}
-			list_erase(&descr->list_entry); // erase from any list, TODO
+			list::erase(&descr->list_entry);
 			--pools;
 		}
 
@@ -360,7 +437,7 @@ namespace cuw::mem {
 			} return nullptr;
 		}
 
-		ad_t* find(void* addr, int max_lookups) const {
+		ad_t* find(void* addr, int max_lookups) {
 			if (ad_t* descr = free_pools.find(addr, max_lookups)) {
 				return check_t::check_descr(descr) ? descr : nullptr;
 			} if (ad_t* descr = full_pools.find(addr, max_lookups)) {

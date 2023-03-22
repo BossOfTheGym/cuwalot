@@ -232,24 +232,6 @@ namespace cuw::mem {
 		};
 
 		template<class alloc_traits_t, class = void>
-		struct alloc_aux_pool_specs_t {
-			static constexpr aux_pool_chunk_size_t alloc_aux_pool_first_chunk = default_aux_pool_first_chunk;
-			static constexpr aux_pool_chunk_size_t alloc_aux_pool_last_chunk = default_aux_pool_last_chunk;
-		};
-
-		template<class alloc_traits_t>
-		struct alloc_aux_pool_specs_t<alloc_traits_t,
-			std::void_t<
-				enable_option_t<pool_chunk_size_t, decltype(alloc_traits_t::alloc_aux_pool_first_chunk)>,
-				enable_option_t<pool_chunk_size_t, decltype(alloc_traits_t::alloc_aux_pool_last_chunk)>
-			>
-		> {
-			static constexpr pool_chunk_size_t alloc_aux_pool_first_chunk = alloc_traits_t::alloc_aux_pool_first_chunk;
-			static constexpr pool_chunk_size_t alloc_aux_pool_last_chunk = alloc_traits_t::alloc_aux_pool_last_chunk;
-			static_assert((attrs_t)alloc_aux_pool_first_chunk <= (attrs_t)alloc_aux_pool_last_chunk);
-		};
-
-		template<class alloc_traits_t, class = void>
 		struct alloc_raw_bins_specs_t {
 			static constexpr attrs_t alloc_raw_base_size = max_pool_chunk_size<attrs_t>(); 
 			static constexpr attrs_t alloc_total_raw_bins = default_total_raw_bins;
@@ -295,7 +277,6 @@ namespace cuw::mem {
 		, impl::alloc_base_alignment_t<traits_t>
 		, impl::use_alloc_cache_t<traits_t>
 		, impl::check_alloc_cache_t<traits_t>
-		, impl::alloc_pool_specs_t<traits_t> 
-		, impl::alloc_aux_pool_specs_t<traits_t>
+		, impl::alloc_pool_specs_t<traits_t>
 		, impl::alloc_raw_bins_specs_t<traits_t> {};
 }

@@ -12,3 +12,9 @@ target_link_libraries(test_block_pool cuw)
 
 add_executable(test_page_alloc test_page_alloc.cpp)
 target_link_libraries(test_page_alloc cuw)
+
+add_executable(test_alloc_wrappers test_alloc_wrappers.cpp)
+target_link_libraries(test_alloc_wrappers cuw)
+
+add_executable(test_pool_alloc test_pool_alloc.cpp)
+target_link_libraries(test_pool_alloc cuw)

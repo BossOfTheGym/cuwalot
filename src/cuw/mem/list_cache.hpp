@@ -79,8 +79,16 @@ namespace cuw::mem {
 			return list::begin(&entry);
 		}
 
+		auto begin() const {
+			return list::cbegin(&entry);
+		}
+
 		auto end() {
 			return list::end(&entry);
+		}
+
+		auto end() const {
+			return list::cend(&entry);
 		}
 
 	private:

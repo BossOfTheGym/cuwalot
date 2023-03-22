@@ -251,8 +251,18 @@ namespace cuw::list {
 	}
 
 	template<class node_t>
+	auto cbegin(const node_t* head) {
+		return iter_t<const node_t>{head->next};
+	}
+
+	template<class node_t>
 	auto end(node_t* head) {
 		return iter_t{head};
+	}
+
+	template<class node_t>
+	auto cend(const node_t* head) {
+		return iter_t<const node_t>{head};
 	}
 
 	template<class node_t>

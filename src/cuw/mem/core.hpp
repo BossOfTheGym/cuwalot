@@ -46,8 +46,8 @@ namespace cuw::mem {
 	inline constexpr attrs_t default_min_pool_size = (attrs_t)1 << default_min_pool_power; 
 	inline constexpr attrs_t default_max_pool_size = (attrs_t)1 << default_max_pool_power;
 
-	inline constexpr int default_pool_cache_lookups = 8; // lookups in free_list to access chunk(to realloc or free)
-	inline constexpr int default_raw_cache_lookups = 16; // lookups in a list of raw allocations(to realloc or free)
+	inline constexpr int default_pool_cache_lookups = 4; // lookups in free_list to access chunk(to realloc or free)
+	inline constexpr int default_raw_cache_lookups = 8; // lookups in a list of raw allocations(to realloc or free)
 
 	inline constexpr std::size_t default_base_alignment = 16; // default alignment
 
@@ -109,13 +109,13 @@ namespace cuw::mem {
 	inline constexpr auto default_pool_last_chunk = pool_chunk_size_t::Max; 
 
 	template<class int_t>
-	constexpr int_t pool_alignment(int_t value) {
-		return pool_chunk_size(value);
+	constexpr int_t pool_chunk_size(int_t value) {
+		return (int_t)1 << (int_t)value;
 	}
 
 	template<class int_t>
-	constexpr int_t pool_chunk_size(int_t value) {
-		return (int_t)1 << (int_t)value;
+	constexpr int_t pool_alignment(int_t value) {
+		return pool_chunk_size(value);
 	}
 
 	template<class int_t>
