@@ -193,19 +193,17 @@ namespace cuw::mem {
 			assert(block);
 			assert(data);
 			ad_t* descr = new (block) ad_t {
-				.offset = offset, .size = size, .chunk_size = value_to_pool_chunk(alignment), .data = data
+				.offset = offset, .size = align_value(size, alignment), .chunk_size = value_to_pool_chunk(alignment), .data = data
 			};
 			base_t::insert_allocated(descr);
 			addr_cache.insert(descr);
 		}
 
 		ad_t* release(const ad_addr_cache_t& addr_cache, void* ptr, int max_lookups) {
-			ad_t* descr = find(addr_cache, ptr, max_lookups);
-			if (!descr) {
-				abort();
-			}
-			base_t::reinsert_freed(descr);
-			return descr;
+			if (ad_t* descr = find(addr_cache, ptr, max_lookups)) {
+				base_t::reinsert_freed(descr);
+				return descr;
+			} abort();
 		}
 
 		ad_t* release(ad_t* descr) {
@@ -232,10 +230,9 @@ namespace cuw::mem {
 
 		// it does not remove found block from addr cache
 		ad_t* extract(ad_addr_cache_t& addr_cache, void* ptr, int max_lookups) {
-			ad_t* descr = find(addr_cache, ptr, max_lookups);
-			if (!descr) {
-				abort();
-			} return extract(addr_cache, descr);
+			if (ad_t* descr = find(addr_cache, ptr, max_lookups)) {
+				return extract(addr_cache, descr);
+			} abort();
 		}
 
 		ad_t* extract(ad_addr_cache_t& addr_cache, ad_t* descr) {

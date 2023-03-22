@@ -87,7 +87,7 @@ namespace cuw::mem {
 			return data;
 		}
 
-		// only valid for raw allocation (well, also for pool & aux_pool)
+		// only valid for raw allocation (well, also for pool)
 		inline atrts_t get_alignment() const {
 			return pool_chunk_size(chunk_size);
 		}
@@ -471,5 +471,5 @@ namespace cuw::mem {
 		void reset() {
 			base_t::reset();
 		}
-	}
+	};
 }

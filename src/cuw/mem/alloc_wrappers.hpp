@@ -77,7 +77,9 @@ namespace cbt::mem {
 
 	class pool_descr_wrapper_t {
 	public:
-		pool_descr_wrapper_t(alloc_descr_t* wrapped = nullptr) : descr{wrapped} {}
+		using ad_t = alloc_descr_t;
+
+		pool_descr_wrapper_t(ad_t* _descr = nullptr) : descr{_descr} {}
 
 		inline bool has_addr(void* addr) const {
 			return descr->has_add(addr);
@@ -141,16 +143,16 @@ namespace cbt::mem {
 			descr->head = value;
 		}
 
-		inline void set_descr(alloc_descr_t* value) {
+		inline void set_descr(ad_t* value) {
 			descr = value;
 		} 
 
-		inline alloc_descr_t* get_descr() const {
+		inline ad_t* get_descr() const {
 			return descr;
 		}
 
 	private:
-		alloc_descr_t* descr{};
+		ad_t* descr{};
 	};
 
 	// pool_chunk is power of two
@@ -207,8 +209,7 @@ namespace cbt::mem {
 		using base_t = pool_ops_t;
 
 		inline void* acquire_chunk() {
-			attrs_t head = base_t::get_head();
-			if (head != head_empty) {
+			if (attrs_t head = base_t::get_head(); head != head_empty) {
 				void* chunk = base_t::get_chunk_memory(head);
 				base_t::set_head(((pool_hdr_t*)chunk)->next);
 				return chunk;
@@ -218,8 +219,7 @@ namespace cbt::mem {
 		}
 
 		inline void* peek_chunk() const {
-			attrs_t head = base_t::get_head();
-			if (head != head_empty) {
+			if (attrs_t head = base_t::get_head(); head != head_empty) {
 				return base_t::get_chunk_memory(head);
 			} return nullptr;
 		}
@@ -258,8 +258,7 @@ namespace cbt::mem {
 		inline byte_pool_wrapper_t(ad_t* descr) : base_t(descr, type_to_chunk_size<byte_pool_t, attrs_t>()) {}
 
 		inline void* acquire_chunk() {
-			byte_pool_t* pool = (byte_pool_t*)base_t::peek_chunk();
-			if (pool) {
+			if (byte_pool_t* pool = (byte_pool_t*)base_t::peek_chunk()) {
 				void* chunk = pool->acquire_chunk();
 				if (pool->full()) {
 					base_t::acquire_chunk();
@@ -314,6 +313,6 @@ namespace cbt::mem {
 		}
 
 	private:
-		alloc_descr_t* descr{};
+		ad_t* descr{};
 	};
 }

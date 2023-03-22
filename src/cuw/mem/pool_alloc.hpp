@@ -180,12 +180,11 @@ namespace cuw::mem {
 		pool_alloc_t& operator = (pool_alloc_t&&) = delete; 
 
 		void adopt(pool_alloc_t& another) {
-			assert(this != &another);
-
+			if (this == &another) {
+				return;
+			}
 			ad_entry.adopt(another.ad_entry);
-
 			addr_cache.adopt(another.addr_cache);
-
 			byte_pool.adopt(another.byte_pool);
 			pools.adopt(another.pools);
 			raw_bins.adopt(another.raw_bins);
@@ -199,7 +198,7 @@ namespace cuw::mem {
 
 		template<class int_t>
 		int_t adjust_alignment(int_t value) {
-			assert_alignment();
+			assert_alignment(value);
 			if (value == 0) {
 				value = base_t::alloc_base_alignment;
 			} return std::min(value, (int_t)base_t::get_page_size());
@@ -237,10 +236,10 @@ namespace cuw::mem {
 
 			auto [pool_size, pool_capacity] = pool.get_next_pool_params(base_t::alloc_min_pool_power, base_t::alloc_max_pool_power);
 
-			void* pool_data = base_t::malloc(size);
+			void* pool_data = base_t::allocate(size);
 			if (!pool_data) {
 				free_descr(ad, offset);
-				return dalse;
+				return false;
 			}
 			
 			pool.create_empty(addr_cache, ad, offset, pool_size, pool_capacity, pool_data);
@@ -276,7 +275,7 @@ namespace cuw::mem {
 			finish_release(addr_cache, pool.release(ptr, ad));
 		}
 
-	private:
+	private: // alignment must be adjusted beforehand
 		void* alloc_byte() {
 			alloc_pool(byte_pool);
 		}
@@ -292,64 +291,34 @@ namespace cuw::mem {
 		// allocates memory only if memory is allocated in one of the pools
 		// true means that we tried to allocate from pool
 		// pointer can be null 
-		template<class iter1_t, class iter2_t>
-		std::tuple<void*, bool> alloc_pool_choice(std::size_t size_aligned, std::size_t alignment,
-								iter1_t pool, iter1_t end, iter2_t aux_pool, iter2_t aux_end) {
-			assert_alignment(alignment);
-
+		std::tuple<void*, bool> alloc_pool_choice(std::size_t size_aligned, iter1_t pool, iter1_t end) {
 			if (size_aligned == 1) {
 				return {alloc_byte(), true};
-			} if (pool != end && aux_pool != aux_end) {
-				auto pool_chunk = pool->get_chunk_size();
-				auto aux_pool_chunk = aux_pool->get_chunk_size();
-				if (aux_pool_chunk < pool_chunk && alignment <= aux_pool->get_max_alignment()) {
-					return {alloc_pool(*aux_pool), true};
-				} return {alloc_pool(*pool), true};
-			} if (pool != end || aux_pool != aux_end) {
-				if (pool != end) {
-					return {alloc_pool(*pool), true};
-				} return {alloc_pool(*aux_pool), true};
+			} if (pool != end) {
+				return {alloc_pool(*pool), true};
 			} return {nullptr, false};
 		}
 
 		template<class iter1_t, class iter2_t>
-		bool free_pool_choice(void* ptr, std::size_t size_aligned, std::size_t alignment,
-					iter1_t pool, iter1_t end, iter2_t aux_pool, iter2_t aux_end) {
-			assert_alignment(alignment);
-
+		bool free_pool_choice(void* ptr, std::size_t size_aligned, iter1_t pool, iter1_t end) {
 			if (size_aligned == 1) {
 				free_byte(ptr);
 				return true;
-			} if (pool != end() && aux_pool != aux_end) {
-				auto pool_chunk = pool->get_chunk_size();
-				auto aux_pool_chunk = aux_pool->get_chunk_size();
-				if (aux_pool_chunk < pool_chunk && alignment <= aux_pool->get_max_alignment()) {
-					free_pool(*aux_pool, ptr);
-					return true;
-				}
+			} if (pool != end) {
 				free_pool(*pool, ptr);
-				return true;
-			} if (pool != pools.end() || aux_pool != aux_pools.end()) {
-				if (pool != pools.end()) {
-					free_pool(*pool, ptr);
-					return true;
-				}
-				free_pool(*aux_pool, ptr);
 				return true;
 			} return false;
 		}
 
 		template<class _raw_bin_t>
 		void* alloc_raw(_raw_bin_t& bin, std::size_t size, std::size_t alignment) {
-			alignment = adjust_alignment(alignment);
-
 			auto [ad, offset] = alloc_descr();
 			if (!ad) {
 				return nullptr;
 			}
 
 			std::size_t size_aligned = align_value(size, alignment);
-			void* data = base_t::malloc(size_aligned);
+			void* data = base_t::allocate(size_aligned);
 			if (!data) {
 				free_descr(ad, offset);
 				return nullptr;
@@ -380,29 +349,25 @@ namespace cuw::mem {
 		}
 
 		void* realloc_raw(void* old_ptr, std::size_t old_size, std::size_t alignment, std::size_t new_size) {
-			assert_alignment(alignment);
-
-			auto old_bin = raw_bins.find(old_size);
-			auto new_bin = raw_bins.find(new_size);
-
-			ad_t* extracted = extract_raw(*old_bin, old_ptr);
-			assert(alignment == extracted->get_alignment());
-
 			std::size_t old_size_aligned = align_value(old_size, alignment);
 			std::size_t new_size_aligned = align_value(new_size, alignment);
 
- 			void* new_memory = base_t::realloc(extracted->get_data(), old_size_aligned, new_size_aligned);
-			if (!new_memory) {
-				put_back_raw(*old_bin, extracted);
-				return nullptr;
-			}
+			auto old_bin = raw_bins.find(old_size_aligned);
+			auto new_bin = raw_bins.find(new_size_aligned);
 
-			if (new_memory != extracted->get_data()) {
-				extracted->set_size(new_size);
-				extracted->set_data(new_memory);
-			}
-			put_back_raw(*new_bin, extracted);
-			return new_memory;
+			ad_t* extracted = extract_raw(*old_bin, old_ptr);
+			if (alignment == extracted->get_alignment()) {
+				void* new_memory = base_t::reallocate(extracted->get_data(), old_size_aligned, new_size_aligned);
+				if (!new_memory) {
+					put_back_raw(*old_bin, extracted);
+					return nullptr;
+				} if (new_memory != extracted->get_data()) {
+					extracted->set_size(new_size_aligned);
+					extracted->set_data(new_memory);
+				}
+				put_back_raw(*new_bin, extracted);
+				return new_memory;
+			} return nullptr;
 		}
 
 	private:
@@ -415,13 +380,11 @@ namespace cuw::mem {
 			alignment = adjust_alignment(alignment);
 
 			std::size_t size_aligned = align_value(size, alignment);
-
-			auto pool = pools.find(size_aligned);
-			auto aux_pool = aux_pools.find(size_aligned);
-			auto [ptr, in_pool] = alloc_pool_choice(size_aligned, alignment, pool, pools.end(), aux_pool, aux_pools.end()); 
-			if (in_pool) {
-				return ptr;
-			} return alloc_raw(*raw_bins.find(size), size, alignment);
+			if (size_aligned == 1) {
+				return alloc_byte();
+			} if (auto pool = pools.find(size_aligned); pool != pools.end()) {
+				return alloc_pool(*pool);
+			} return alloc_raw(*raw_bins.find(size_aligned), size, alignment);
 		}
 
 		void free42(void* ptr) {
@@ -456,11 +419,11 @@ namespace cuw::mem {
 			alignment = adjust_alignment(alignment);
 
 			std::size_t size_aligned = align_value(size, alignment);
-			auto pool = pools.find(size_aligned);
-			auto aux_pool = aux_pools.find(size_aligned);
-			if (free_pool_choice(ptr, size_aligned, alignment, pool, pools.end(), aux_pool, aux_pool.end())) {
-				return;
-			} free_raw(*raw_bins.find(size), ptr);
+			if (size_aligned == 1) {
+				free_byte(ptr);
+			} else if (auto pool = pools.find(size_aligned); pool != pools.end()) {
+				free_pool(*pool);
+			} free_raw(*raw_bins.find(size_aligned), ptr);
 		}
 
 		void* realloc42(void* old_ptr, std::size_t new_size) {
@@ -502,53 +465,61 @@ namespace cuw::mem {
 			}
 
 			auto old_pool = pools.find(old_size_aligned);
-			auto old_aux_pool = aux_pools.find(old_size_aligned);
 			auto new_pool = pools.find(new_size_aligned);
-			auto new_aux_pool = aux_pools.find(new_size_aligned);
-
-			bool old_in_pool = old_size_aligned == 1 || old_pool != pools.end() || old_aux_pool != aux_pools.end();
-			bool new_in_pool = new_size_aligned == 1 || new_pool != pools.end() || new_aux_pool != aux_pools.end(); 
+			bool old_in_pool = old_size_aligned == 1 || old_pool != pools.end();
+			bool new_in_pool = new_size_aligned == 1 || new_pool != pools.end(); 
 
 			// pool-pool transfer
 			if (old_in_pool && new_in_pool) {
-				if (old_pool != pools.end() && old_pool == new_pool ||
-					old_aux_pool != aux_pools.end() && old_aux_pool == new_aux_pool) {
-					return old_ptr;
+				if (old_pool != pools.end() && old_pool == new_pool) {
+					return old_ptr; // same chunk_size
 				}
 
-				auto [new_ptr, in_pool] = alloc_pool_choice(new_size_aligned,
-													new_pool, pools.end(), new_aux_pool, aux_pools.end());
-				if (!new_ptr) {
+				void* new_ptr{};
+				if (new_size_aligned == 1) {
+					new_ptr = alloc_byte();
+				} else {
+					new_ptr = alloc_pool(*new_pool);
+				} if (!new_ptr) {
 					return nullptr;
 				}
 
 				memcpy(new_ptr, old_ptr, std::min(old_size, new_size));
-				free_pool_choice(old_ptr, old_size_aligned, old_pool, pools.end(), old_aux_pool, aux_pools.end());
-				return new_ptr;
+				if (old_size_aligned == 1) {
+					free_byte(old_ptr);
+				} else {
+					free_pool(*old_pool, old_ptr);
+				} return new_ptr;
 			}
 
 			// pool-raw transfer
 			if (old_in_pool) {
-				void* new_ptr = alloc_raw(new_size_aligned);
+				void* new_ptr = alloc_raw(new_size);
 				if (!new_ptr) {
 					return nullptr;
 				}
 
 				memcpy(new_ptr, old_ptr, std::min(old_size, new_size));
-				free_pool_choice(old_ptr, old_size_aligned, old_pool, pools.end(), old_aux_pool, aux_pools.end());
-				return new_ptr;
+				if (old_size_aligned == 1) {
+					free_byte(old_ptr);
+				} else {
+					free_pool(*old_pool, old_ptr);
+				} return new_ptr;
 			}
 
 			// raw-pool transfer
 			if (new_in_pool) {
-				auto [new_ptr, in_pool] = alloc_pool(new_size_aligned,
-												new_pool, pools.end(), new_aux_pool, aux_pools.end());
-				if (!new_ptr) {
+				void* new_ptr{};
+				if (new_size_aligned == 1) {
+					new_ptr = alloc_byte();
+				} else {
+					new_ptr = alloc_pool(*new_pool);
+				} if (!new_ptr) {
 					return nullptr;
 				}
 
 				memcpy(new_ptr, old_ptr, std::min(old_size, new_size));
-				free_raw(*raw_bins.find(old_size_aligned), old_ptr); // TODO : raw allocations & alignment
+				free_raw(*raw_bins.find(old_size_aligned), old_ptr);
 				return new_ptr;
 			}
 
@@ -565,12 +536,12 @@ namespace cuw::mem {
 		void* malloc(std::size_t size) {
 			if (size == 0){
 				return zero_alloc();
-			} return alloc42(size, alignment);
+			} return alloc42(size);
 		}
 
 		void* realloc(void* ptr, std::size_t new_size) {
 			if (!ptr) {
-				return alloc(new_size);
+				return alloc42(new_size);
 			} if (new_size == 0) {
 				free42(ptr);
 				return zero_alloc();
@@ -607,9 +578,7 @@ namespace cuw::mem {
 
 	private:
 		ad_entry_t ad_entry{};
-
 		addr_cache_t addr_cache{}; // common addr cache for all allocations
-
 		pool_bytes_t byte_pool{};
 		pools_t pools{};
 		aux_pools_t aux_pools{};

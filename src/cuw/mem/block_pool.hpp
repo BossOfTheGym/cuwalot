@@ -283,7 +283,6 @@ namespace cuw::mem {
 			}
 		}
 
-		// TODO : check this while finishing pool_alloc
 		// void func(void* mem, std::size_t size)
 		template<class func_t>
 		void finish_release(bp_t* bp, func_t func) {
