@@ -174,6 +174,6 @@ namespace cuw::mem {
 
 	// simple pool header
 	struct pool_hdr_t {
-		std::uint16_t next;
+		std::uint16_t next; // not initialized
 	};
 }

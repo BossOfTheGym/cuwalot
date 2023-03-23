@@ -35,7 +35,8 @@ namespace cuw::mem {
 		void create_empty(ad_addr_cache_t& addr_cache, void* block, attrs_t offset, attrs_t size, attrs_t capacity, void* data) {
 			assert(block);
 			assert(data);
-
+			assert(is_aligned(data, base_t::get_chunk_size()));
+			
 			ad_t* descr = new (block) ad_t {
 				.offset = offset, .size = size,
 				.type = base_t::get_type(), .chunk_size = base_t::get_chunk_size_enum(),

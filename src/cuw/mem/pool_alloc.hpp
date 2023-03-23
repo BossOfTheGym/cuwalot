@@ -380,7 +380,7 @@ namespace cuw::mem {
 		void free42(void* ptr) {
 			if (ad_t* ad = addr_cache.find(ptr)) {
 				free42(ad, ptr);
-			} abort();
+			} std::abort();
 		}
 
 		void free42(ad_t* ad, void* ptr) {
@@ -395,12 +395,12 @@ namespace cuw::mem {
 					if (auto pool = pools.find(chunk_size); pool != pools.end()) {
 						free_pool(*pool, ptr, ad);
 						return;
-					} abort();
+					} std::abort();
 				} case Raw: {
 					free_raw(*raw_bins.find(ad->get_size()), ad);
 					return;
 				} default: {
-					abort();
+					std::abort();
 				}
 			}
 		}
@@ -440,7 +440,7 @@ namespace cuw::mem {
 					alignment = ad->get_alignment(); // will be adjusted further
 					break;
 				} default: {
-					abort();
+					std::abort();
 				}
 			} return realloc42(old_ptr, old_size, alignment, new_size);
 		}

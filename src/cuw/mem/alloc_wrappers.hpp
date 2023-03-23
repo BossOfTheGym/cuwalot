@@ -27,21 +27,22 @@ namespace cuw::mem {
 		static inline constexpr std::size_t hdr_size = 4;
 		static inline constexpr std::size_t max_chunks = 12;
 
+		byte_pool_t(std::uint16_t next) : hdr{next}, mask{} {}
+
 		inline std::uint16_t get_chunk_index(void* chunk) {
+			assert(has_addr(chunk));
 			return (std::uint16_t)((uint8_t*)chunk - &chunks[0]);
 		}
 
-		inline void* acquire_chunk() {
-			int index = std::countr_one(mask);
-			if (index < max_chunks) {
+		[[nodiscard]] inline void* acquire_chunk() {
+			if (int index = std::countr_one(mask); index < max_chunks) {
 				mask |= 1 << index;
 				return &chunks[index];
 			} return nullptr;
 		}
 
 		inline void* peek_chunk() {
-			int index = std::countr_one(mask);
-			if (index < max_chunks) {
+			if (int index = std::countr_one(mask); index < max_chunks) {
 				return &chunks[index];
 			} return nullptr;
 		}
@@ -66,16 +67,17 @@ namespace cuw::mem {
 		}
 
 		inline bool full() const {
-			return mask == 0x3FFF;
+			return mask == 0x0FFF;
 		}
 
 	private:
-		std::uint16_t next;
-		std::uint16_t mask;
-		std::uint8_t chunks[max_chunks];
+		pool_hdr_t hdr{}; // TODO: how to... properly.... assign this via indirect memory write
+		std::uint16_t mask{};
+		std::uint8_t chunks[max_chunks]{};
 	};
 
 	// pool_chunk is power of two
+	// chunk_size is logi(pool_chunk)
 	class pool_ops_t : public alloc_descr_wrapper_t {
 	public:
 		using base_t = alloc_descr_wrapper_t;
@@ -107,7 +109,7 @@ namespace cuw::mem {
 			auto data_value = (std::uintptr_t)base_t::get_data();
 			if (chunk_value < data_value) {
 				return nullptr;
-			} return (void*)(chunk_value & ((std::uintptr_t)get_chunk_size() - 1));
+			} return (void*)(chunk_value & ~((std::uintptr_t)get_chunk_size() - 1));
 		}
 
 		inline bool has_chunk(void* addr) const {
@@ -129,16 +131,15 @@ namespace cuw::mem {
 		using base_t = pool_ops_t;
 		using base_t::base_t;
 		
-		inline void* acquire_chunk() {
+		[[nodiscard]] inline void* acquire_chunk() {
 			if (attrs_t head = base_t::get_head(); head != alloc_descr_head_empty) {
 				void* chunk = base_t::get_chunk_memory(head);
 				base_t::set_head(((pool_hdr_t*)chunk)->next);
 				return chunk;
-			} if (base_t::has_capacity()) {
-				return base_t::get_chunk_memory(base_t::inc_used());
-			} return nullptr; // no more chunks
+			} return acquire_unused_chunk();
 		}
 
+		// peeks next unused chunk
 		inline void* peek_chunk() const {
 			if (attrs_t head = base_t::get_head(); head != alloc_descr_head_empty) {
 				return base_t::get_chunk_memory(head);
@@ -149,6 +150,12 @@ namespace cuw::mem {
 			assert(base_t::has_chunk(chunk));
 			((pool_hdr_t*)chunk)->next = base_t::get_head();
 			base_t::set_head(base_t::get_chunk_index(chunk));
+		}
+
+		[[nodiscard]] inline void* acquire_unused_chunk() {
+			if (base_t::has_capacity()) {
+				return base_t::get_chunk_memory(base_t::inc_used());
+			} return nullptr; // no more chunks
 		}
 	};
 
@@ -168,6 +175,13 @@ namespace cuw::mem {
 			base_t::release_chunk(chunk);
 			base_t::dec_count();
 		}
+
+		inline void* acquire_unused_chunk() {
+			void* chunk = base_t::acquire_unused_chunk();
+			if (chunk) {
+				base_t::inc_count();
+			} return chunk;
+		}
 	};
 
 	using pool_wrapper_t = basic_pool_wrapper_t;
@@ -179,34 +193,53 @@ namespace cuw::mem {
 
 		inline byte_pool_wrapper_t(ad_t* descr) : base_t(descr, type_to_pool_chunk<byte_pool_t, attrs_t>()) {}
 
+	private:
+		// adds next unused chunk into list, as a side effect, it will be possible to peek this chunk
+		[[nodiscard]] inline byte_pool_t* try_use_pool() {
+			if (base_t::has_capacity()) {
+				attrs_t new_head = base_t::inc_used();
+				void* chunk = base_t::get_chunk_memory(new_head);
+				auto* pool = new (chunk) byte_pool_t(base_t::get_head());
+				base_t::set_head(new_head);
+				return pool;
+			} return nullptr;
+		}
+
+	public:
 		inline void* acquire_chunk() {
-			if (byte_pool_t* pool = (byte_pool_t*)base_t::peek_chunk()) {
-				void* chunk = pool->acquire_chunk();
-				if (pool->full()) {
+			auto try_acquire_chunk = [&] (auto* byte_pool) {
+				assert(byte_pool);
+				void* chunk = byte_pool->acquire_chunk();
+				if (byte_pool->full()) {
 					base_t::acquire_chunk();
-					base_t::inc_count();
 				} return chunk;
+			};
+
+			if (auto* byte_pool = (byte_pool_t*)base_t::peek_chunk()) {
+				return try_acquire_chunk(byte_pool);
+			} if (auto* byte_pool = try_use_pool()) {
+				return try_acquire_chunk(byte_pool); // initialize pool
 			} return nullptr;
 		}
 
 		inline void* peek_chunk() const {
-			if (byte_pool_t* pool = (byte_pool_t*)base_t::peek_chunk()) {
+			if (auto* pool = (byte_pool_t*)base_t::peek_chunk()) {
 				return pool->peek_chunk();
 			} return nullptr;
 		}
 
 		inline void release_chunk(void* chunk) {
-			if (byte_pool_t* pool = (byte_pool_t*)base_t::refine_chunk_memory(chunk)) {
+			if (auto* pool = (byte_pool_t*)base_t::refine_chunk_memory(chunk)) {
 				pool->release_chunk(chunk);
 				if (pool->empty()) {
-					base_t::release_chunk(chunk);
+					base_t::release_chunk(pool);
 					base_t::dec_count();
 				}
 			}
 		}
 
 		inline bool has_chunk(void* chunk) const {
-			if (byte_pool_t* pool = (byte_pool_t*)base_t::refine_chunk_memory(chunk)) {
+			if (auto* pool = (byte_pool_t*)base_t::refine_chunk_memory(chunk)) {
 				return pool->has_chunk(chunk);
 			} return false;
 		}
