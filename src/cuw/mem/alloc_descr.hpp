@@ -252,9 +252,13 @@ namespace cuw::mem {
 			static_cast<base_t&>(*this) = std::move(part1);
 		}
 
+		// void func(ad_t* descr)
 		template<class func_t>
 		void release_all(func_t func) {
-			base_t::release_all([&] (adl_t* bdl) { func(ad_t::list_entry_to_descr(bdl)); });
+			base_t::release_all([&] (adl_t* entry) {
+				func(ad_t::list_entry_to_descr(entry));
+				return true;
+			});
 		}
 
 		void reset() {
@@ -456,6 +460,7 @@ namespace cuw::mem {
 			another.pools = 0;
 		}
 
+		// void func(ad_t* descr)
 		template<class func_t>
 		void release_all(func_t func) {
 			free_pools.release_all(func);
@@ -464,6 +469,7 @@ namespace cuw::mem {
 			pools = 0;
 		}
 
+		// void func(ad_t* descr)
 		template<class func_t>
 		void release_empty(func_t func) {
 			empty_pools.release_all([&] (ad_t* descr) {
@@ -540,6 +546,7 @@ namespace cuw::mem {
 			base_t::adopt(another, first_part);
 		}
 
+		// void 
 		template<class func_t>
 		void release_all(func_t func) {
 			base_t::release_all(func);

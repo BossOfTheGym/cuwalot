@@ -73,6 +73,14 @@ namespace cuw::mem {
 				});
 			}
 
+			// void func(void* block, std::size_t offset, void* data, std::size_t size)
+			template<class func_t>
+			void release_all(func_t func) {
+				for (auto& pool : pools) {
+					pool.release_all(func);
+				}
+			}
+
 			void adopt(pools_t& another, int merge_param) {
 				for (int i = 0; i < total_pools; i++) {
 					pools[i].adopt(another.pools[i], merge_param);
@@ -117,6 +125,14 @@ namespace cuw::mem {
 				find(ad->get_size())->insert(ad);
 			}
 
+			// void func(void* block, std::size_t offset, void* data, std::size_t size)
+			template<class func_t>
+			void release_all(func_t func) {
+				for (auto& bin : bins) {
+					bin.release_all(func);
+				}
+			}
+
 			void adopt(raw_bins_t& another, int merge_param) {
 				for (int i = 0; i < total_bins; i++) {
 					bins[i].adopt(another.bins[i], merge_param);
@@ -155,28 +171,20 @@ namespace cuw::mem {
 		using raw_bins_t = impl::raw_bins_t<raw_bin_t, base_t::alloc_raw_base_size, base_t::alloc_total_raw_bins>;
 
 	public:
-		// addr_cache is external to pool_allocator
 		pool_alloc_t() = default;
 
 		pool_alloc_t(const pool_alloc_t&) = delete;
 		pool_alloc_t(pool_alloc_t&&) = delete;
 
 		~pool_alloc_t() {
-			ad_entry.release_all([&] (void* data, std::size_t size) {
-				base_t::free(data, size);
-			});
-
 			auto release_func = [&] (void* block, attrs_t offset, void* data, attrs_t size) {
-				base_t::free(data, size);
-				free_descr(block, offset);
+				base_t::deallocate(data, size);
+				// free_descr(block, offset); // we can leak descrs here as all blocks will be freed anyways
 			};
-			
 			byte_pool.release_all(addr_cache, release_func);
-			for (auto& pool : pools) {
-				pool.release_all(addr_cache, release_func);
-			} for (auto& bin : raw_bins) {
-				bin.release_all(addr_cache, release_func);
-			}
+			pools.release_all(addr_cache, release_func);
+			raw_bins.release_all(addr_cache, release_func);
+			ad_entry.release_all([&] (void* data, std::size_t size) { base_t::deallocate(data, size); });
 		}
 
 		pool_alloc_t& operator = (const pool_alloc_t&) = delete;
@@ -224,9 +232,7 @@ namespace cuw::mem {
 		// deallocates description, does not free associated memory
 		void free_descr(void* descr, attrs_t offset) {
 			if (bp_t* released = ad_entry.release(descr, offset)) {
-				ad_entry.finish_release(released, [&] (void* data, std::size_t size) {
-					base_t::deallocate(data, size);
-				});
+				ad_entry.finish_release(released, [&] (void* data, std::size_t size) { base_t::deallocate(data, size); });
 			}
 		}
 
@@ -338,7 +344,9 @@ namespace cuw::mem {
 			auto new_bin = raw_bins.find(new_size_aligned);
 
 			ad_t* extracted = extract_raw(*old_bin, old_ptr);
-			if (alignment == extracted->get_alignment()) {
+			if (!extracted) {
+				return nullptr; // very bad
+			} if (alignment == extracted->get_alignment()) {
 				void* new_memory = base_t::reallocate(extracted->get_data(), old_size_aligned, new_size_aligned);
 				if (!new_memory) {
 					put_back_raw(*old_bin, extracted);

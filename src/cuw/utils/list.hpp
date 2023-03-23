@@ -39,9 +39,9 @@ namespace cuw::list {
 	}
 
 	template<class node_t>
-	void link(node_t* first, node_t* second) {
-		first->next = second;
-		second->prev = first;
+	void link(node_t* prev, node_t* next) {
+		prev->next = next;
+		next->prev = prev;
 	}
 
 	template<class node_t>

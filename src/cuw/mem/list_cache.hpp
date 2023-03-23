@@ -55,6 +55,7 @@ namespace cuw::mem {
 			list::split(&entry, first, &part1.entry, &part2.entry);
 		}
 
+		// TODO : rethink functions returning bool
 		// bool func(entry_t*)
 		template<class func_t>
 		void release_all(func_t func) {

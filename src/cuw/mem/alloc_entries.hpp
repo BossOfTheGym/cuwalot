@@ -228,11 +228,10 @@ namespace cuw::mem {
 			});
 		}
 
-		// it does not remove found block from addr cache
 		ad_t* extract(ad_addr_cache_t& addr_cache, void* ptr, int max_lookups) {
 			if (ad_t* descr = find(addr_cache, ptr, max_lookups)) {
 				return extract(addr_cache, descr);
-			} abort();
+			} return nullptr;
 		}
 
 		ad_t* extract(ad_addr_cache_t& addr_cache, ad_t* descr) {
