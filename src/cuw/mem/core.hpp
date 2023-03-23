@@ -74,7 +74,6 @@ namespace cuw::mem {
 
 	enum block_type_t : attrs_t {
 		Pool = 0, // pool of chunks
-		PoolAux, // pool of chunks of non-power-of-two sizes
 		PoolBytes, // byte pool
 		Raw, // raw allocation: this is just continious block of memory
 	};
@@ -135,42 +134,6 @@ namespace cuw::mem {
 		value = std::countr_zero(value); 
 		assert(value >= (int_t)pool_chunk_size_t::Min && value <= (int_t)pool_chunk_size_t::Max);
 		return value;
-	}
-
-	// can save some space (up to power_of_two bytes can be possibly wasted)
-	// has weaker alignment capabilities: as much as capabilities of the basic power_of_two
-	// for example: 96 = 3 * 32, 96-byte chunk can store any data that can be stored in a 32-byte block
-	// and 32-byte chunk can store data aligned as 1,2,4,8,16,32
-	enum class aux_pool_chunk_size_t : attrs_t {
-		Empty = chunk_size_empty,
-		Min = 0, 
-		Bytes3 = Min,
-		Bytes6,
-		Bytes12,
-		Bytes24,
-		Bytes48,
-		Bytes96, // for example, this has similar alignment properties as Bytes32 chunk
-		Bytes192,
-		Bytes384,
-		Bytes768,
-		Bytes1536,
-		Bytes3072,
-		Bytes6144,
-		Max = Bytes6144,
-	};
-
-	inline constexpr auto default_aux_pool_first_chunk = aux_pool_chunk_size_t::Bytes96;
-	inline constexpr auto default_aux_pool_last_chunk = aux_pool_chunk_size_t::Max;
-
-	// same as plain pool_chunk_size_t, but chunk size is almost power of two(3 * power_of_two)
-	template<class int_t>
-	constexpr int_t aux_pool_chunk_size(int_t value) {
-		return (int_t)3 << (int_t)value;
-	}
-
-	template<class int_t>
-	constexpr int_t aux_pool_alignment(int_t value) {
-		return pool_alignment(value);
 	}
 
 
