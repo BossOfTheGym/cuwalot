@@ -286,6 +286,7 @@ namespace cuw::mem {
 			} return nullptr;
 		}
 
+		// TODO : two strategies : flatten-merge-rebuild and insert-from-another
 		inline void adopt(alloc_descr_addr_cache_t& another) {
 			bst::traverse_inorder(another.index, [&] (addr_index_t* addr) {
 				index = trb::insert_lb(index, addr, ad_t::addr_ops_t{});

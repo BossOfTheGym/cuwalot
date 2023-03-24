@@ -153,6 +153,7 @@ namespace cuw::mem {
 		page_alloc_t& operator = (const page_alloc_t&) = delete;
 		page_alloc_t& operator = (page_alloc_t&&) = delete;
 
+		// TODO : two strategies : flatten-merge-rebuild and insert-from-another 
 		void adopt(page_alloc_t& another) {
 			assert(page_size == another.page_size); // a little bit redundant
 
