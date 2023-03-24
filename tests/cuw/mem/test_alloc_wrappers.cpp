@@ -1,10 +1,13 @@
 #include <vector>
+#include <cstring>
 #include <iostream>
 
 #include <cuw/mem/core.hpp>
 #include <cuw/mem/alloc_descr.hpp>
 #include <cuw/mem/alloc_entries.hpp>
 #include <cuw/mem/alloc_wrappers.hpp>
+
+#include "utils.hpp"
 
 using namespace cuw;
 
@@ -85,45 +88,81 @@ namespace {
 			chunk = nullptr;
 		};
 
-		std::cout << "allocating all..." << std::endl;
-		for (int i = 0; i < total_allocs; i++) {
-			allocate(allocated[i], i);
-		}
-		
-		std::cout << "deallocating all..." << std::endl; 
-		for (int i = 0; i < total_allocs; i++) {
-			deallocate(allocated[i], i);
-		}
+		auto check_invalid_allocation = [&] () {
+			if (void* chunk = wrapper.acquire_chunk()) {
+				std::cerr << "wrong!" << std::endl;
+				std::abort();
+			}
+		};
+
+		std::cout << "testing byte_pool_wrapper" << std::endl;
 
 		std::cout << "allocating all..." << std::endl;
 		for (int i = 0; i < total_allocs; i++) {
 			allocate(allocated[i], i);
-		}
+		} std::cout << std::endl;
+		
+		check_invalid_allocation();
+
+		std::cout << "deallocating all..." << std::endl; 
+		for (int i = 0; i < total_allocs; i++) {
+			deallocate(allocated[i], i);
+		} std::cout << std::endl;
+
+		std::cout << "allocating all..." << std::endl;
+		for (int i = 0; i < total_allocs; i++) {
+			allocate(allocated[i], i);
+		} std::cout << std::endl;
+
+		check_invalid_allocation();
 
 		std::cout << "deallocating even chunks..." << std::endl;
 		for (int i = 0; i < total_allocs; i += 2) {
 			deallocate(allocated[i], i);
-		}
+		} std::cout << std::endl;
 
 		std::cout << "deallocating odd chunks..." << std::endl;
 		for (int i = 1; i < total_allocs; i += 2) {
 			deallocate(allocated[i], i);
-		}
+		} std::cout << std::endl;
 
 		std::cout << "allocating all..." << std::endl;
 		for (int i = 0; i < total_allocs; i++) {
 			allocate(allocated[i], i);
-		}
+		} std::cout << std::endl;
+
+		check_invalid_allocation();
 
 		std::cout << "deallocating even pools..." << std::endl;
 		for (int k = 0; k < total_chunks; k += 2) {
-			// TODO
-		}
+			for (int i = 0; i < allocs_per_pool; i++) {
+				int index = k * allocs_per_pool + i;
+				deallocate(allocated[index], index);
+			}
+		} std::cout << std::endl;
 
 		std::cout << "deallocating odd pools..." << std::endl;
-		for (int k = 0; k < total_chunks; k += 2) {
-			// TODO
-		}
+		for (int k = 1; k < total_chunks; k += 2) {
+			for (int i = 0; i < allocs_per_pool; i++) {
+				int index = k * allocs_per_pool + i;
+				deallocate(allocated[index], index);
+			}
+		} std::cout << std::endl;
+
+		std::cout << "allocating all..." << std::endl;
+		for (int i = 0; i < total_allocs; i++) {
+			allocate(allocated[i], i);
+		} std::cout << std::endl;
+		
+		check_invalid_allocation();
+
+		std::cout << "deallocating all..." << std::endl; 
+		for (int i = 0; i < total_allocs; i++) {
+			deallocate(allocated[i], i);
+		} std::cout << std::endl;
+
+		std::cout << "final memory view: " << std::endl << mem_view_t{chunks, total_size} << std::endl;
+		std::cout << "Congratulations! We didn't crash! Ya-ah-ay!" << std::endl;
 
 		return 0;
 	}
@@ -132,8 +171,115 @@ namespace {
 		return test_ad_t((attrs_t)mem::block_type_t::Pool, (attrs_t)chunk_size, mem::pool_chunk_size((attrs_t)chunk_size), size, data);
 	}
 
+	template<mem::pool_chunk_size_t chunk_enum, attrs_t total_chunks = 4>
 	int test_pool_wrapper() {
+		constexpr attrs_t chunk_align = mem::pool_alignment((attrs_t)chunk_enum);
+		constexpr attrs_t chunk_size = mem::pool_chunk_size((attrs_t)chunk_enum);
+		constexpr attrs_t total_size = total_chunks * chunk_size;
+		constexpr attrs_t lines_per_block = chunk_size / (mem_view_t::default_groups_per_line * mem_view_t::default_bytes_per_group);
+
+		alignas(chunk_align) std::uint8_t data[total_size] = {};
+
+		test_ad_t test_ad = create_pool(chunk_enum, total_size, data);
+		mem::basic_pool_wrapper_t wrapper(test_ad, (attrs_t)chunk_enum);
+
+		void* allocated[total_chunks] = {};
+
+		auto allocate = [&] (auto& chunk, int value) {
+			chunk = wrapper.acquire_chunk();
+			if (!chunk) {
+				std::cerr << "something went wrong..." << std::endl;
+				std::abort();
+			}
+			std::memset(chunk, value, chunk_size);
+			std::cout << "allocated: " << (void*)chunk << std::endl;
+		};
+
+		auto deallocate = [&] (auto& chunk, int value) {
+			std::uint8_t cmp_chunk[chunk_size] = {};
+			std::memset(cmp_chunk, value, chunk_size);
+			if (std::memcmp(chunk, cmp_chunk, chunk_size)) {
+				std::cerr << "invalid check value" << std::endl;
+				std::abort();
+			}
+			wrapper.release_chunk(chunk);
+			std::cout << "deallocated: " << (void*)chunk << std::endl;
+			chunk = nullptr;
+		};
+
+		auto check_invalid_allocation = [&] () {
+			if (void* chunk = wrapper.acquire_chunk()) {
+				std::cerr << "wrong!" << std::endl;
+				std::abort();
+			}
+		};
+
+		std::cout << "testing pool wrapper with chunk_size = " << chunk_size << std::endl;
+
+		std::cout << "allocating all..." << std::endl;
+		for (int i = 0; i < total_chunks; i++) {
+			allocate(allocated[i], i);
+		}
+
+		check_invalid_allocation();
+
+		std::cout << "deallocating all.." << std::endl;
+		for (int i = 0; i < total_chunks; i++) {
+			deallocate(allocated[i], i);
+		} std::cout << std::endl;
+
+		std::cout << "allocating all..." << std::endl;
+		for (int i = 0; i < total_chunks; i++) {
+			allocate(allocated[i], i);
+		} std::cout << std::endl;
+
+		check_invalid_allocation();
+
+		std::cout << "deallocating even..." << std::endl;
+		for (int i = 0; i < total_chunks; i += 2) {
+			deallocate(allocated[i], i);
+		} std::cout << std::endl;
+
+		std::cout << "deallocating odd..." << std::endl;
+		for (int i = 1; i < total_chunks; i += 2) {
+			deallocate(allocated[i], i);
+		} std::cout << std::endl;
+
+		std::cout << "allocating all..." << std::endl;
+		for (int i = 0; i < total_chunks; i++) {
+			allocate(allocated[i], i);
+		} std::cout << std::endl;
+
+		check_invalid_allocation();
+
+		std::cout << "deallocating all.." << std::endl;
+		for (int i = 0; i < total_chunks; i++) {
+			deallocate(allocated[i], i);
+		} std::cout << std::endl;
+
+		std::cout << "final memory view: " << std::endl << mem_view_t{data, total_size, lines_per_block} << std::endl;
+
+		std::cout << "Congratulations! We didn't crash! Yay!" << std::endl << std::endl;
+
 		return 0;
+	}
+
+	int test_pool_wrapper() {
+		if (test_pool_wrapper<mem::pool_chunk_size_t::Bytes2>()) {
+			return -1;
+		} if (test_pool_wrapper<mem::pool_chunk_size_t::Bytes4>()) {
+			return -1;
+		} if (test_pool_wrapper<mem::pool_chunk_size_t::Bytes8>()) {
+			return -1;
+		} if (test_pool_wrapper<mem::pool_chunk_size_t::Bytes16>()) {
+			return -1;
+		} if (test_pool_wrapper<mem::pool_chunk_size_t::Bytes32>()) {
+			return -1;
+		} if (test_pool_wrapper<mem::pool_chunk_size_t::Bytes64>()) {
+			return -1;
+		} if (test_pool_wrapper<mem::pool_chunk_size_t::Bytes128>()) {
+			return -1;
+		} return 0;
 	}
 }
 

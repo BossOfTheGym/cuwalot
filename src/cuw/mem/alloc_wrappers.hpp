@@ -77,31 +77,31 @@ namespace cuw::mem {
 	};
 
 	// pool_chunk is power of two
-	// chunk_size is logi(pool_chunk)
+	// chunk_enum is logi(pool_chunk)
 	class pool_ops_t : public alloc_descr_wrapper_t {
 	public:
 		using base_t = alloc_descr_wrapper_t;
 		using ad_t = alloc_descr_t;
 
-		inline pool_ops_t(ad_t* descr = nullptr, attrs_t _chunk_size = chunk_size_empty)
-			: base_t(descr), chunk_size{_chunk_size} {}
+		inline pool_ops_t(ad_t* descr = nullptr, attrs_t _chunk_enum = chunk_size_empty)
+			: base_t(descr), chunk_enum{_chunk_enum} {}
 
 		inline attrs_t get_chunk_size() const {
-			return pool_chunk_size<attrs_t>(chunk_size);
+			return pool_chunk_size(chunk_enum);
 		}
 
 		inline attrs_t get_chunk_size_enum() const {
-			return chunk_size;
+			return chunk_enum;
 		}
 
 		inline void* get_chunk_memory(attrs_t index) const {
-			return (char*)base_t::get_data() + ((std::uintptr_t)index << chunk_size);
+			return (char*)base_t::get_data() + ((std::uintptr_t)index << chunk_enum);
 		}
 
 		inline attrs_t get_chunk_index(void* chunk) const {
 			assert(has_chunk(chunk));
 			auto diff = (std::uintptr_t)chunk - (std::uintptr_t)base_t::get_data();
-			return (attrs_t)(diff >> (std::uintptr_t)chunk_size);
+			return (attrs_t)(diff >> (std::uintptr_t)chunk_enum);
 		}
 
 		inline void* refine_chunk_memory(void* chunk) const {
@@ -119,11 +119,11 @@ namespace cuw::mem {
 				return false;
 			} if ((addr_value & ((std::uintptr_t)get_chunk_size() - 1)) != 0) {
 				return false;
-			} return ((addr_value - data_value) >> (std::uintptr_t)chunk_size) < base_t::get_capacity();
+			} return ((addr_value - data_value) >> (std::uintptr_t)chunk_enum) < base_t::get_capacity();
 		}
 		
 	private:
-		attrs_t chunk_size{};
+		attrs_t chunk_enum{};
 	};
 
 	class basic_pool_ops_t : public pool_ops_t {
