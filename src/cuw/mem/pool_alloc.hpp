@@ -474,7 +474,7 @@ namespace cuw::mem {
 					return nullptr;
 				}
 
-				memcpy(new_ptr, old_ptr, std::min(old_size, new_size));
+				std::memcpy(new_ptr, old_ptr, std::min(old_size, new_size));
 				if (old_size_aligned == 1) {
 					free_byte(old_ptr);
 				} else {
@@ -489,7 +489,7 @@ namespace cuw::mem {
 					return nullptr;
 				}
 
-				memcpy(new_ptr, old_ptr, std::min(old_size, new_size));
+				std::memcpy(new_ptr, old_ptr, std::min(old_size, new_size));
 				if (old_size_aligned == 1) {
 					free_byte(old_ptr);
 				} else {
@@ -508,7 +508,7 @@ namespace cuw::mem {
 					return nullptr;
 				}
 
-				memcpy(new_ptr, old_ptr, std::min(old_size, new_size));
+				std::memcpy(new_ptr, old_ptr, std::min(old_size, new_size));
 				free_raw(*raw_bins.find(old_size_aligned), old_ptr);
 				return new_ptr;
 			}

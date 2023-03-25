@@ -98,10 +98,6 @@ namespace cuw::mem {
 			});
 		}
 
-		void insert(ad_t* descr) {
-			base_t::insert(descr);
-		}
-
 		void reset() {
 			base_t::reset();
 		}
