@@ -402,26 +402,10 @@ namespace cuw::mem {
 			} full_pools.reinsert(descr);
 		}
 
-		void insert_empty(ad_t* descr) {
-			if (!check_t::check_descr(descr)) {
-				return;
-			}
-			empty_pools.insert(descr);
-			++pools;
-		}
-
-		void reinsert_empty(ad_t* descr) {
-			if (!check_t::check_descr(descr)) {
-				return;
-			} empty_pools.reinsert(descr);
-		}
-
 
 		void insert(ad_t* descr) {
 			alloc_descr_wrapper_t pool{descr};
-			if (pool.empty()) {
-				insert_empty(descr);
-			} if (pool.full()) {
+			if (pool.full()) {
 				insert_full(descr);
 			} insert_free(descr);
 		}		
@@ -435,11 +419,7 @@ namespace cuw::mem {
 		}
 
 		ad_t* peek() const {
-			if (ad_t* descr = free_pools.peek()) {
-				return descr;
-			} if (ad_t* descr = empty_pools.peek()) {
-				return descr;
-			} return nullptr;
+			return free_pools.peek();
 		}
 
 		ad_t* find(void* addr, int max_lookups) {
@@ -456,7 +436,6 @@ namespace cuw::mem {
 			}
 			free_pools.adopt(another.free_pools, first_part);
 			full_pools.adopt(another.full_pools, first_part);
-			empty_pools.adopt(another.empty_pools, first_part);
 			pools += another.pools;
 			another.pools = 0;
 		}
@@ -466,23 +445,12 @@ namespace cuw::mem {
 		void release_all(func_t func) {
 			free_pools.release_all(func);
 			full_pools.release_all(func);
-			empty_pools.release_all(func);
 			pools = 0;
-		}
-
-		// void func(ad_t* descr)
-		template<class func_t>
-		void release_empty(func_t func) {
-			empty_pools.release_all([&] (ad_t* descr) {
-				func(descr);
-				--pools;
-			});
 		}
 
 		void reset() {
 			free_pools.reset();
 			full_pools.reset();
-			empty_pools.reset();
 		}
 
 		attrs_t get_type() const {
@@ -492,7 +460,6 @@ namespace cuw::mem {
 	private:
 		ad_cache_t free_pools{};
 		ad_cache_t full_pools{};
-		ad_cache_t empty_pools{};
 		attrs_t type{};
 		attrs_t pools{};
 	};

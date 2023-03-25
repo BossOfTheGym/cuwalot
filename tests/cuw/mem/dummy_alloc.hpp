@@ -7,6 +7,8 @@
 
 #include <cuw/mem/alloc_tag.hpp>
 
+#include "utils.hpp"
+
 using namespace cuw;
 
 namespace {
@@ -475,8 +477,8 @@ namespace {
 	};
 
 	std::ostream& operator << (std::ostream& os, const block_view_t& view) {
+		ios_state_guard_t guard{os};
 		unsigned char* ptr = (unsigned char*)view.ptr;
-		auto flags = os.flags();
 		for (std::size_t i = 0; i < view.size; i++) {
 			if (i % mem::block_align == 0) {
 				os << std::dec << std::setfill(' ') << std::setw(8) << i / mem::block_align << ": ";
@@ -485,9 +487,7 @@ namespace {
 			if ((i + 1) % mem::block_align == 0) {
 				os << std::endl;
 			}
-		}
-		os.flags(flags);
-		return os;
+		} return os;
 	}
 
 	void check_allocation(void* allocated, void* expected) {

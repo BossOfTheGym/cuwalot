@@ -5,6 +5,44 @@
 #include <iostream>
 
 namespace {
+	struct ios_state_guard_t {
+		ios_state_guard_t(std::ostream& _os)
+			: os{_os}, precision{os.precision()}, width{os.width()}, iostate{os.rdstate()}, flags{os.flags()} {}
+
+		~ios_state_guard_t() {
+			os.precision(precision);
+			os.width(width);
+			os.setstate(iostate);
+			os.flags(flags);
+		}
+
+		std::ostream& os;
+		std::streamsize precision;
+		std::streamsize width;
+		std::ios_base::iostate iostate;
+		std::ios_base::fmtflags flags;
+	};
+
+	template<class type_t>
+	struct pretty_t {
+		type_t data;
+	};
+
+	template<>
+	struct pretty_t<void*> {
+		void* ptr{};
+	};
+
+	template<class type_t>
+	auto pretty(type_t data) {
+		return pretty_t{data};
+	}
+
+	std::ostream& operator << (std::ostream& os, const pretty_t<void*>& data) {
+		ios_state_guard_t guard{os};
+		return os << std::setw(sizeof(void*) * 2 + 2) << std::setfill('0') << std::internal << std::showbase << std::hex << (std::uintptr_t)data.ptr;
+	}
+
 	struct mem_view_t {
 		inline static constexpr std::size_t default_lines_per_block = 4;
 		inline static constexpr std::size_t default_groups_per_line = 4;
@@ -18,7 +56,7 @@ namespace {
 	};
 
 	std::ostream& operator << (std::ostream& os, const mem_view_t& view) {
-		auto flags = os.flags();
+		ios_state_guard_t guard{os};
 
 		std::uint8_t* ptr = (std::uint8_t*)view.ptr;
 		std::size_t size = view.size;
@@ -49,9 +87,6 @@ namespace {
 
 		while (size > 0) {
 			try_print_line();
-		}
-
-		os.flags(flags);
-		return os;
+		} return os;
 	}
 }

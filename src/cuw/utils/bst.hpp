@@ -213,36 +213,30 @@ namespace cuw::bst {
 	template<class node_t, class func_t>
 	void traverse_inorder(node_t* root, func_t&& func) {
 		if (root) {
-			if (root->left) {
-				traverse_inorder(root->left, func);
-			}
+			auto left = root->left, right = root->right;
+			traverse_inorder(left, func);
 			func(root);
-			if (root->right) {
-				traverse_inorder(root->right, func);
-			}
+			traverse_inorder(right, func);
 		}
 	}
 
 	template<class node_t, class func_t>
 	void traverse_preorder(node_t* root, func_t&& func) {
 		if (root) {
+			auto left = root->left, right = root->right;
 			func(root);
-			if (root->left) {
-				traverse_preorder(root->left, func);
-			} if (root->right) {
-				traverse_preorder(root->right, func);
-			}
+			traverse_preorder(left, func);
+			traverse_preorder(right, func);
 		}
 	}
 
 	template<class node_t, class func_t>
 	void traverse_postorder(node_t* root, func_t&& func) {
 		if (root) {
-			if (root->left) {
-				traverse_postorder(root->left, func);
-			} if (root->right) {
-				traverse_postorder(root->right, func);
-			} func(root);
+			auto left = root->left, right = root->right;
+			traverse_postorder(root->left, func);
+			traverse_postorder(root->right, func);
+			func(root);
 		}
 	}
 

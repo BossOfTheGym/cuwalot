@@ -55,8 +55,7 @@ namespace cuw::mem {
 			list::split(&entry, first, &part1.entry, &part2.entry);
 		}
 
-		// TODO : rethink functions returning bool
-		// bool func(entry_t*)
+		// TODO : release_all rename traverse or for_each that can be destructive, leave bool return value as an indicator that entry was destroyed
 		template<class func_t>
 		void release_all(func_t func) {
 			entry_t* head = &entry;
