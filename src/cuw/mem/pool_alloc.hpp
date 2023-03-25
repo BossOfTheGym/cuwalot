@@ -217,7 +217,7 @@ namespace cuw::mem {
 
 	private:
 		// returns (memory for block description, offset from primary block)
-		std::tuple<void*, attrs_t> alloc_descr() {
+		[[nodiscard]] std::tuple<void*, attrs_t> alloc_descr() {
 			if (auto [ptr, offset] = ad_entry.acquire(); ptr) {
 				return {ptr, offset};
 			}
