@@ -32,7 +32,7 @@ namespace cuw::mem {
 			} return nullptr;
 		}
 
-		void create_empty(ad_addr_cache_t& addr_cache, void* block, attrs_t offset, attrs_t size, attrs_t capacity, void* data) {
+		ad_t* create(ad_addr_cache_t& addr_cache, void* block, attrs_t offset, attrs_t size, attrs_t capacity, void* data) {
 			assert(block);
 			assert(data);
 			assert(is_aligned(data, base_t::get_chunk_size()));
@@ -43,12 +43,13 @@ namespace cuw::mem {
 				.capacity = capacity, .head = alloc_descr_head_empty,
 				.data = data,
 			};
-			base_t::insert_empty(descr);
+			base_t::insert(descr);
 			addr_cache.insert(descr);
+			return descr;
 		}
 
 		template<class wrapper_t>
-		void* acquire() {
+		[[nodiscard]] void* acquire() {
 			ad_t* descr = base_t::peek();
 			if (!descr) {
 				return nullptr;
@@ -64,26 +65,20 @@ namespace cuw::mem {
 		}
 
 		template<class wrapper_t>
-		ad_t* release(const ad_addr_cache_t& addr_cache, void* ptr, int cache_lookups) {
-			ad_t* descr = find(addr_cache, ptr, cache_lookups);
-			if (!descr) {
-				abort();
-			} return release<wrapper_t>(ptr, descr);
+		[[nodiscard]] ad_t* release(const ad_addr_cache_t& addr_cache, void* ptr, int cache_lookups) {
+			if (ad_t* descr = find(addr_cache, ptr, cache_lookups)) {
+				return release<wrapper_t>(ptr, descr);
+			} std::abort();
 		}
 
 		template<class wrapper_t>
-		ad_t* release(void* ptr, ad_t* descr) {
+		[[nodiscard]] ad_t* release(void* ptr, ad_t* descr) {
 			wrapper_t pool(descr, base_t::get_chunk_size_enum());
 			assert(!pool.empty());
 
 			pool.release_chunk(ptr);
-			if (!pool.empty()) {
-				base_t::reinsert_free(descr);
-				return nullptr;
-			} else {
-				base_t::reinsert_empty(descr);
-				return descr;
-			}
+			base_t::reinsert_free(descr);
+			return pool.empty() ? descr : nullptr;
 		}
 
 		// void func(void* block, attrs_t offset, void* data, attrs_t size)
@@ -98,15 +93,6 @@ namespace cuw::mem {
 		template<class func_t>
 		void release_all(ad_addr_cache_t& addr_cache, func_t func) {
 			base_t::release_all([&] (ad_t* descr) {
-				addr_cache.erase(descr);
-				func(descr, descr->get_offset(), descr->get_data(), descr->get_size());
-			});
-		}
-
-		// void func(void* block, attrs_t offset, void* data, attrs_t size)
-		template<class func_t>
-		void release_empty(ad_addr_cache_t& addr_cache, func_t func) {
-			base_t::release_empty([&] (ad_t* descr) {
 				addr_cache.erase(descr);
 				func(descr, descr->get_offset(), descr->get_data(), descr->get_size());
 			});
@@ -132,15 +118,15 @@ namespace cuw::mem {
 		pool_entry_t(pool_chunk_size_t chunk_size = pool_chunk_size_t::Empty)
 			: base_t{(attrs_t)chunk_size, (attrs_t)block_type_t::Pool} {}
 
-		void* acquire() {
+		[[nodiscard]] void* acquire() {
 			return base_t::template acquire<wrapper_t>();
 		}
 
-		ad_t* release(const ad_addr_cache_t& addr_cache, void* ptr, int cache_lookups) {
+		[[nodiscard]] ad_t* release(const ad_addr_cache_t& addr_cache, void* ptr, int cache_lookups) {
 			return base_t::template release<wrapper_t>(addr_cache, ptr, cache_lookups);
 		}
 
-		ad_t* release(void* ptr, ad_t* descr) {
+		[[nodiscard]] ad_t* release(void* ptr, ad_t* descr) {
 			return base_t::template release<wrapper_t>(ptr, descr);
 		}
 	};
@@ -155,15 +141,15 @@ namespace cuw::mem {
 
 		byte_pool_entry_t() : base_t{type_to_pool_chunk<byte_pool_t, attrs_t>(), (attrs_t)block_type_t::PoolBytes} {}
 
-		void* acquire() {
+		[[nodiscard]] void* acquire() {
 			return base_t::template acquire<wrapper_t>();
 		}
 
-		ad_t* release(const ad_addr_cache_t& addr_cache, void* ptr, int cache_lookups) {
+		[[nodiscard]] ad_t* release(const ad_addr_cache_t& addr_cache, void* ptr, int cache_lookups) {
 			return base_t::template release<wrapper_t>(addr_cache, ptr, cache_lookups);
 		}
 
-		ad_t* release(void* ptr, ad_t* descr) {
+		[[nodiscard]] ad_t* release(void* ptr, ad_t* descr) {
 			return base_t::template release<wrapper_t>(ptr, descr);
 		}
 	};
@@ -196,18 +182,17 @@ namespace cuw::mem {
 			ad_t* descr = new (block) ad_t {
 				.offset = offset, .size = align_value(size, alignment), .chunk_size = value_to_pool_chunk(alignment), .data = data
 			};
-			base_t::insert_allocated(descr);
+			base_t::insert(descr);
 			addr_cache.insert(descr);
 		}
 
-		ad_t* release(const ad_addr_cache_t& addr_cache, void* ptr, int max_lookups) {
+		[[nodiscard]] ad_t* release(const ad_addr_cache_t& addr_cache, void* ptr, int max_lookups) {
 			if (ad_t* descr = find(addr_cache, ptr, max_lookups)) {
-				base_t::reinsert_freed(descr);
 				return descr;
-			} abort();
+			} std::abort();
 		}
 
-		ad_t* release(ad_t* descr) {
+		[[nodiscard]] ad_t* release(ad_t* descr) {
 			base_t::reinsert_freed(descr);
 			return descr;
 		}
@@ -229,13 +214,13 @@ namespace cuw::mem {
 			});
 		}
 
-		ad_t* extract(ad_addr_cache_t& addr_cache, void* ptr, int max_lookups) {
+		[[nodiscard]] ad_t* extract(ad_addr_cache_t& addr_cache, void* ptr, int max_lookups) {
 			if (ad_t* descr = find(addr_cache, ptr, max_lookups)) {
 				return extract(addr_cache, descr);
 			} return nullptr;
 		}
 
-		ad_t* extract(ad_addr_cache_t& addr_cache, ad_t* descr) {
+		[[nodiscard]] ad_t* extract(ad_addr_cache_t& addr_cache, ad_t* descr) {
 			base_t::erase(descr);
 			addr_cache.erase(descr);
 			return descr;
@@ -248,10 +233,6 @@ namespace cuw::mem {
 
 		void adopt(raw_entry_t& another, int first_part) {
 			base_t::adopt(another, first_part);
-		}
-
-		void insert(ad_t* descr) {
-			base_t::insert(descr);
 		}
 
 		void reset() {

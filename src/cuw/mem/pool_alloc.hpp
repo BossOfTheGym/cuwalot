@@ -238,7 +238,7 @@ namespace cuw::mem {
 
 	private:
 		template<class _pool_t>
-		bool create_empty(_pool_t& pool) {
+		bool create_pool(_pool_t& pool) {
 			auto [ad, offset] = alloc_descr();
 			if (!ad) {
 				return false;
@@ -252,7 +252,7 @@ namespace cuw::mem {
 				return false;
 			}
 			
-			pool.create_empty(addr_cache, ad, offset, pool_size, pool_capacity, pool_data);
+			pool.create(addr_cache, ad, offset, pool_size, pool_capacity, pool_data);
 			return true;
 		}
 
@@ -268,10 +268,10 @@ namespace cuw::mem {
 
 	private: // alignment must be adjusted beforehand
 		template<class _pool_t>
-		void* alloc_pool(_pool_t& pool) {
+		[[nodiscard]] void* alloc_pool(_pool_t& pool) {
 			if (void* ptr = pool.acquire()) {
 				return ptr;
-			} if (create_empty(pool)) {
+			} if (create_pool(pool)) {
 				return pool.acquire();
 			} return nullptr;
 		}
@@ -286,7 +286,7 @@ namespace cuw::mem {
 			finish_release(addr_cache, pool.release(ptr, ad));
 		}
 
-		void* alloc_byte() {
+		[[nodiscard]] void* alloc_byte() {
 			return alloc_pool(byte_pool);
 		}
 
@@ -299,7 +299,7 @@ namespace cuw::mem {
 		}
 
 		template<class _raw_bin_t>
-		void* alloc_raw(_raw_bin_t& bin, std::size_t size, std::size_t alignment) {
+		[[nodiscard]] void* alloc_raw(_raw_bin_t& bin, std::size_t size, std::size_t alignment) {
 			auto [ad, offset] = alloc_descr();
 			if (!ad) {
 				return nullptr;
@@ -327,7 +327,7 @@ namespace cuw::mem {
 		}
 
 		template<class _raw_bin_t>
-		ad_t* extract_raw(_raw_bin_t& bin, void* ptr) {
+		[[nodiscard]] ad_t* extract_raw(_raw_bin_t& bin, void* ptr) {
 			return bin.extract(addr_cache, ptr, base_t::alloc_raw_cache_lookups);
 		}
 
@@ -336,7 +336,7 @@ namespace cuw::mem {
 			bin.put_back(addr_cache, ad);
 		}
 
-		void* realloc_raw(void* old_ptr, std::size_t old_size, std::size_t alignment, std::size_t new_size) {
+		[[nodiscard]] void* realloc_raw(void* old_ptr, std::size_t old_size, std::size_t alignment, std::size_t new_size) {
 			std::size_t old_size_aligned = align_value(old_size, alignment);
 			std::size_t new_size_aligned = align_value(new_size, alignment);
 
@@ -361,12 +361,12 @@ namespace cuw::mem {
 		}
 
 	private:
-		void* alloc42(std::size_t size) {
+		[[nodiscard]] void* alloc42(std::size_t size) {
 			std::size_t alignment = size != 1 ? 0 : 1;
 			return alloc42(size, alignment);
 		}
 
-		void* alloc42(std::size_t size, std::size_t alignment) {
+		[[nodiscard]] void* alloc42(std::size_t size, std::size_t alignment) {
 			alignment = adjust_alignment(alignment);
 
 			std::size_t size_aligned = align_value(size, alignment);
@@ -416,7 +416,7 @@ namespace cuw::mem {
 			} free_raw(*raw_bins.find(size_aligned), ptr);
 		}
 
-		void* realloc42(void* old_ptr, std::size_t new_size) {
+		[[nodiscard]] void* realloc42(void* old_ptr, std::size_t new_size) {
 			using enum block_type_t;
 
 			ad_t* ad = addr_cache.find(old_ptr);
@@ -445,7 +445,7 @@ namespace cuw::mem {
 			} return realloc42(old_ptr, old_size, alignment, new_size);
 		}
 
-		void* realloc42(void* old_ptr, std::size_t old_size, std::size_t alignment, std::size_t new_size) {
+		[[nodiscard]] void* realloc42(void* old_ptr, std::size_t old_size, std::size_t alignment, std::size_t new_size) {
 			alignment = adjust_alignment(alignment);
 
 			std::size_t old_size_aligned = align_value(old_size, alignment);
@@ -517,19 +517,19 @@ namespace cuw::mem {
 			return realloc_raw(old_ptr, old_size, alignment, new_size);
 		}
 
-		void* zero_alloc() {
+		[[nodiscard]] void* zero_alloc() {
 			static int zero_allocation;
 			return &zero_allocation;
 		}
 
 	public: // standart API
-		void* malloc(std::size_t size) {
+		[[nodiscard]] void* malloc(std::size_t size) {
 			if (size == 0){
 				return zero_alloc();
 			} return alloc42(size);
 		}
 
-		void* realloc(void* ptr, std::size_t new_size) {
+		[[nodiscard]] void* realloc(void* ptr, std::size_t new_size) {
 			if (!ptr) {
 				return alloc42(new_size);
 			} if (new_size == 0) {
@@ -545,13 +545,13 @@ namespace cuw::mem {
 		}
 
 	public: // extension API
-		void* malloc(std::size_t size, std::size_t alignment, flags_t flags = 0) {
+		[[nodiscard]] void* malloc(std::size_t size, std::size_t alignment, flags_t flags = 0) {
 			if (size == 0) {
 				return zero_alloc();
 			} return alloc42(size, alignment);
 		}
 
-		void* realloc(void* ptr, std::size_t old_size, std::size_t new_size, std::size_t alignment, flags_t flags = 0) {
+		[[nodiscard]] void* realloc(void* ptr, std::size_t old_size, std::size_t new_size, std::size_t alignment, flags_t flags = 0) {
 			if (!ptr) {
 				return alloc42(new_size, alignment, flags);
 			} if (new_size == 0) {
