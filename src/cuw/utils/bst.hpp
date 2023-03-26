@@ -285,7 +285,7 @@ namespace cuw::bst {
 
 	template<class node_t>
 	auto begin(node_t* root) {
-		return tree_iter_t(tree_min(root));
+		return tree_iter_t(root ? tree_min(root) : nullptr);
 	}
 
 	template<class node_t>

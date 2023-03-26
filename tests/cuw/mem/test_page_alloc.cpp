@@ -1,3 +1,4 @@
+#include <random>
 #include <iomanip>
 #include <iostream>
 
@@ -123,7 +124,7 @@ namespace {
 		alloc.deallocate(block_mem_t{start, +7}, block_size_t{6});
 
 		std::cout << "final state: " << std::endl << block_view_t{start, 13} << std::endl;
-		std::cout << "testing reallocation finished" << std::endl;
+		std::cout << "testing reallocation finished" << std::endl << std::endl;
 
 		return 0;
 	}
@@ -250,7 +251,7 @@ namespace {
 		alloc1.release_mem();
 
 		std::cout << "final state:" << std::endl << block_view_t{start, 20} << std::endl;
-		std::cout << "adoption test successfully finished" << std::endl;
+		std::cout << "adoption test successfully finished" << std::endl << std::endl;
 
 		return 0;
 	}
@@ -324,13 +325,129 @@ namespace {
 		alloc1.release_mem();
 
 		std::cout << "final state: " << std::endl << block_view_t{start, 18} << std::endl;
-		std::cout << "adoption test(advanced) successfully finished" << std::endl;
+		std::cout << "adoption test(advanced) successfully finished" << std::endl << std::endl;
 
 		return 0;
 	}
 
+	class int_gen_t {
+	public:
+		int_gen_t(int seed) : rgen(seed) {}
+
+		// generate number from [a, b)
+		int gen(int a, int b) {
+			int value = rgen();
+			return value % (b - a) + a;
+		}
+
+		// generate number from [0, a)
+		int gen(int a) {
+			int value = rgen();
+			return value % a;
+		}
+
+	private:
+		std::minstd_rand0 rgen;
+	};
+
+	struct allocation_t {
+		void* ptr{};
+		std::size_t size{};
+	};
+
+	std::ostream& operator << (std::ostream& os, const allocation_t& allocation) {
+		return os << print_range_t{allocation.ptr, allocation.size};
+	}
+
+	void memset_deadbeef(void* ptr, std::size_t size) {
+		const char* deadbeef = "\xde\xad\xbe\xef";
+		while (size >= 4) {
+			std::memcpy(ptr, deadbeef, 4);
+			ptr = (char*)ptr + 4;
+			size -= 4;
+		} if (size > 0) {
+			std::memcpy(ptr, deadbeef, size);
+		}
+	}
+
 	int test_random_stuff() {
-		// TODO : series of random allocations or deallocations
+		std::cout << "testing by random allocations/dellocations..." << std::endl;
+
+		constexpr int total_commands = 1 << 7;
+		constexpr std::size_t min_alloc_size = block_size_t{1};
+		constexpr std::size_t max_alloc_size = block_size_t{1 << 10};
+
+		using alloc_t = mem::page_alloc_t<basic_alloc_t<8, 1, 32>>;
+
+		alloc_t alloc(block_size_t{1 << 15}, block_size_t{1});
+		int_gen_t gen(42);
+		std::vector<allocation_t> allocations;
+
+		auto print_status = [&] () {
+			std::cout << "-addr_index" << std::endl << addr_index_info_t{alloc} << std::endl;
+			std::cout << "-size_index" << std::endl << size_index_info_t{alloc} << std::endl;
+			std::cout << "-ranges" << std::endl << ranges_info_t{alloc} << std::endl;
+		};
+
+		auto try_allocate = [&] () {
+			std::size_t size = gen.gen(min_alloc_size, max_alloc_size);
+			std::cout << "trying to allocate block of size " << size << std::endl;
+			if (void* ptr = alloc.allocate(size)) {
+				std::cout << "success" << std::endl;
+				allocations.push_back({ptr, size});
+				memset_deadbeef(ptr, size);
+			} else {
+				std::cout << "failed to allocate block of size " << size << std::endl;
+				print_status();
+			}
+		};
+
+		auto try_deallocate = [&] () {
+			if (allocations.empty()) {
+				std::cout << "nothing to deallocate" << std::endl;
+				return;
+			}
+			int index = gen.gen(allocations.size());
+			std::swap(allocations[index], allocations.back());
+			auto curr = allocations.back();
+			allocations.pop_back();
+
+			std::cout << "deallocating range " << curr << std::endl;
+			std::memset(curr.ptr, 0xFF, curr.size);
+			alloc.deallocate(curr.ptr, curr.size);
+		};
+
+		auto exec_command = [&] (int num) {
+			std::cout << "command No." << num << std::endl;
+			int cmd = gen.gen(2);
+			if (cmd == 0) {
+				try_allocate();
+			} else {
+				try_deallocate();
+			} std::cout << std::endl;
+		};
+
+		for (int i = 0; i < total_commands; i++) {
+			exec_command(i);
+		}
+
+		std::cout << "deallocating all..." << std::endl;
+		std::cout << "total allocations: " << allocations.size() << std::endl;
+		for (auto& [ptr, size] : allocations) {
+			alloc.deallocate(ptr, size);
+		} std::cout << std::endl;
+
+		std::cout << "final status: " << std::endl;
+		print_status();
+
+		std::cout << "releasing memory..." << std::endl;
+		alloc.release_mem();
+
+		std::cout << "after release:" << std::endl;
+		print_status(); 
+
+		std::cout << "testing finished" << std::endl << std::endl;
+		
 		return 0;
 	}
 }
