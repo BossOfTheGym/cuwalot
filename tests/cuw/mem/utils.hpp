@@ -4,6 +4,8 @@
 #include <cstring>
 #include <iostream>
 
+#include <cuw/mem/alloc_descr.hpp>
+
 namespace {
 	struct ios_state_guard_t {
 		ios_state_guard_t(std::ostream& _os)
@@ -88,5 +90,24 @@ namespace {
 		while (size > 0) {
 			try_print_line();
 		} return os;
+	}
+
+	struct print_range_t {
+		void* ptr{};
+		std::size_t size{};
+	};
+
+	std::ostream& operator << (std::ostream& os, const print_range_t& print) {
+		return os << "[" << pretty(print.ptr) << ":" << print.size << "]";
+	}
+
+	struct print_ad_t {
+		cuw::mem::alloc_descr_t* descr{};
+	};
+
+	std::ostream& operator << (std::ostream& os, const print_ad_t& print) {
+		if (print.descr) {
+			return os << print_range_t{print.descr->get_data(), print.descr->get_size()};
+		} return os << "[null descr]";
 	}
 }

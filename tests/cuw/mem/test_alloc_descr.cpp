@@ -11,16 +11,6 @@ using ad_t = mem::alloc_descr_t;
 using ad_addr_cache_t = mem::alloc_descr_addr_cache_t;
 
 namespace {
-	struct print_ad_t {
-		ad_t* descr{};
-	};
-
-	std::ostream& operator << (std::ostream& os, const print_ad_t& print) {
-		if (print.descr) {
-			return os << "[" << pretty(print.descr->get_data()) << ":" << print.descr->get_size() << "]";
-		} return os << "[null]";
-	}
-
 	int test_addr_cache() {
 		std::cout << "testing addr cache..." << std::endl;
 

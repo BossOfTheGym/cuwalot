@@ -191,7 +191,7 @@ namespace cuw::mem {
 		using base_t = basic_pool_wrapper_t;
 		using ad_t = alloc_descr_t;
 
-		inline byte_pool_wrapper_t(ad_t* descr) : base_t(descr, type_to_pool_chunk<byte_pool_t, attrs_t>()) {}
+		inline byte_pool_wrapper_t(ad_t* descr, attrs_t dummy = 0) : base_t(descr, type_to_pool_chunk<byte_pool_t, attrs_t>()) {}
 
 	private:
 		// adds next unused chunk into list, as a side effect, it will be possible to peek this chunk
@@ -230,10 +230,10 @@ namespace cuw::mem {
 
 		inline void release_chunk(void* chunk) {
 			if (auto* pool = (byte_pool_t*)base_t::refine_chunk_memory(chunk)) {
+				bool was_full = pool->full();
 				pool->release_chunk(chunk);
-				if (pool->empty()) {
+				if (was_full) {
 					base_t::release_chunk(pool);
-					base_t::dec_count();
 				}
 			}
 		}

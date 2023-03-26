@@ -278,7 +278,7 @@ namespace cuw::mem {
 			index = trb::remove(index, &descr->addr_index);
 		}
 
-		inline ad_t* find(void* addr) const {
+		inline ad_t* find(void* addr) {
 			// lower_bound search can guarantee that addr < block end but it doesn't guarantee that addr belongs to block
 			if (addr_index_t* found = bst::lower_bound(index, ad_t::addr_ops_t{}, addr)) {
 				ad_t* descr = ad_t::addr_index_to_descr(found);
@@ -301,56 +301,34 @@ namespace cuw::mem {
 
 	class pool_entry_ops_t {
 	public:
+		pool_entry_ops_t(attrs_t _chunk_enum = chunk_size_empty) : chunk_enum{_chunk_enum} {}
+
 		// size, capacity
 		inline std::tuple<attrs_t, attrs_t> get_next_pool_params(attrs_t pools, attrs_t min_pools, attrs_t max_pools) const {
 			pools = std::clamp(pools, min_pools, max_pools);
 			attrs_t size = (attrs_t)1 << pools;
-			attrs_t capacity = std::min(size >> chunk_size, max_pool_chunks);
-			return {capacity << chunk_size, capacity};
+			attrs_t capacity = std::min(size >> chunk_enum, max_pool_chunks);
+			return {capacity << chunk_enum, capacity};
 		}
 
 		inline attrs_t get_chunk_size() const {
-			return pool_chunk_size(chunk_size);
+			return pool_chunk_size(chunk_enum);
 		}
 
 		inline attrs_t get_chunk_size_enum() const {
-			return chunk_size;
+			return chunk_enum;
 		}
 
 		inline attrs_t get_max_alignment() const {
-			return pool_alignment<attrs_t>(chunk_size);
+			return pool_alignment<attrs_t>(chunk_enum);
 		}
 
 	private:
-		attrs_t chunk_size{};
+		attrs_t chunk_enum{};
 	};
 
 	enum class pool_checks_policy_t {
 		Default
-	};
-
-	template<class __host_t, pool_checks_policy_t __check_policy>
-	class pool_checks_t {
-	public:
-		static constexpr pool_checks_policy_t check_policy = __check_policy;
-
-		using host_t = __host_t;
-		using ad_t = alloc_descr_t;
-
-		bool check_descr(ad_t* descr) const {
-			assert(descr);
-			host_t& host = static_cast<host_t&>(*this);
-			assert(descr->chunk_size == host->get_chunk_size_enum());
-			assert(descr->type == host->get_type());
-			return true;
-		}
-
-		bool check_another(host_t& another) const {
-			host_t& host = static_cast<host_t&>(*this);
-			assert(host->get_chunk_size_enum() == another->get_chunk_size_enum());
-			assert(host->get_type() == another->get_type());
-			return true;
-		}
 	};
 
 
@@ -359,51 +337,51 @@ namespace cuw::mem {
 	// free_cache: list of description blocks (pools) that have free chunks
 	// full_cache: list of description blocks (pools) that have no free chunks
 	template<pool_checks_policy_t check_policy>
-	class alloc_descr_pool_cache_t 
-		: public pool_entry_ops_t
-		, public pool_checks_t<alloc_descr_pool_cache_t<check_policy>, check_policy> {
+	class alloc_descr_pool_cache_t : public pool_entry_ops_t {
 	public:
 		using ops_t = pool_entry_ops_t;
-		using check_t = pool_checks_t<alloc_descr_pool_cache_t<check_policy>, check_policy>;
 		using ad_t = alloc_descr_t;
 		using ad_cache_t = alloc_descr_cache_t;
 
-		alloc_descr_pool_cache_t(attrs_t chunk_size, attrs_t _type) : ops_t(chunk_size), type{_type} {}
+		alloc_descr_pool_cache_t(attrs_t chunk_enum, attrs_t _type) : ops_t(chunk_enum), type{_type} {}
 
+	private:
+		void check_descr(ad_t* descr) const {
+			assert(descr);
+			assert(descr->chunk_size == ops_t::get_chunk_size_enum());
+			assert(descr->type == get_type());
+		}
+
+	public:
 		std::tuple<attrs_t, attrs_t> get_next_pool_params(attrs_t min_pools, attrs_t max_pools) const {
 			return ops_t::get_next_pool_params(pools, min_pools, max_pools);
 		}
 
 		void insert_free(ad_t* descr) {
-			if (!check_t::check_descr(descr)) {
-				return;
-			}
+			check_descr(descr);
 			free_pools.insert(descr);
 			++pools;
 		}
 
 		void reinsert_free(ad_t* descr) {
-			if (!check_t::check_descr(descr)) {
-				return;
-			} free_pools.reinsert(descr);
+			check_descr(descr);
+			free_pools.reinsert(descr);
 		}
 
 		void insert_full(ad_t* descr) {
-			if (!check_t::check_descr(descr)) {
-				return;
-			}
+			check_descr(descr);
 			full_pools.insert(descr);
 			++pools;
 		}
 
 		void reinsert_full(ad_t* descr) {
-			if (!check_t::check_descr(descr)) {
-				return;
-			} full_pools.reinsert(descr);
+			check_descr(descr);
+			full_pools.reinsert(descr);
 		}
 
 
 		void insert(ad_t* descr) {
+			check_descr(descr);
 			alloc_descr_wrapper_t pool{descr};
 			if (pool.full()) {
 				insert_full(descr);
@@ -411,9 +389,7 @@ namespace cuw::mem {
 		}		
 
 		void erase(ad_t* descr) {
-			if (!check_t::check_descr(descr)) {
-				return;
-			}
+			check_descr(descr);
 			list::erase(&descr->list_entry);
 			--pools;
 		}
@@ -424,16 +400,14 @@ namespace cuw::mem {
 
 		ad_t* find(void* addr, int max_lookups) {
 			if (ad_t* descr = free_pools.find(addr, max_lookups)) {
-				return check_t::check_descr(descr) ? descr : nullptr;
-			} if (ad_t* descr = full_pools.find(addr, max_lookups)) {
-				return check_t::check_descr(descr) ? descr : nullptr;
-			} return nullptr;
+				return descr;
+			} return full_pools.find(addr, max_lookups);
 		}
 
 		void adopt(alloc_descr_pool_cache_t& another, int first_part) {
-			if (!check_t::check_another(another)) {
-				return;
-			}
+			assert(ops_t::get_chunk_size_enum() == another.get_chunk_size_enum());
+			assert(get_type() == another.get_type());
+
 			free_pools.adopt(another.free_pools, first_part);
 			full_pools.adopt(another.full_pools, first_part);
 			pools += another.pools;
@@ -468,53 +442,40 @@ namespace cuw::mem {
 		Default
 	};
 
-	template<raw_check_policy_t __check_policy>
-	class raw_checks_t {
-	public:
-		using ad_t = alloc_descr_t;
-
-		static constexpr raw_check_policy_t check_policy = __check_policy; 
-
-		bool check_descr(ad_t* descr) const {
-			assert(descr);
-			assert(descr->get_type() == (attrs_t)block_type_t::Raw);
-			return true;
-		}
-	};
-
 	template<raw_check_policy_t check_policy>
-	class alloc_descr_raw_cache_t
-		: public raw_checks_t<check_policy>
-		, public alloc_descr_cache_t {
+	class alloc_descr_raw_cache_t : public alloc_descr_cache_t {
 	public:
 		using ad_t = alloc_descr_t;
 		using ad_cache_t = alloc_descr_cache_t;
-		using check_t = raw_checks_t<check_policy>;
 		using base_t = alloc_descr_cache_t;
 
+	private:
+		void check_descr(ad_t* descr) const {
+			assert(descr);
+			assert(descr->get_type() == (attrs_t)block_type_t::Raw);
+		}
+
+	public:
 		void insert(ad_t* descr) {
-			if (!check_t::check_descr(descr)) {
-				return;
-			} base_t::insert(descr);
+			check_descr(descr);
+			base_t::insert(descr);
 		}
 
 		void reinsert(ad_t* descr) {
-			if (!check_t::check_descr(descr)) {
-				return;
-			} base_t::reinsert(descr);
+			check_descr(descr);
+			base_t::reinsert(descr);
 		}
 
 		void erase(ad_t* descr) {
-			if (!check_t::check_descr(descr)) {
-				return;
-			} base_t::erase(descr);
+			check_descr(descr);
+			base_t::erase(descr);
 		}
 
 		void adopt(alloc_descr_raw_cache_t& another, int first_part) {
 			base_t::adopt(another, first_part);
 		}
 
-		// void 
+		// void func(ad_t* descr)
 		template<class func_t>
 		void release_all(func_t func) {
 			base_t::release_all(func);

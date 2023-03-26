@@ -86,9 +86,8 @@ namespace cuw::mem {
 	// as much as chunk_size / 2 memory space can be wasted
 	enum class pool_chunk_size_t : attrs_t {
 		Empty = chunk_size_empty,
-		Min = 0,
-		Bytes1 = Min,
-		Bytes2,
+		Min = 1,
+		Bytes2 = Min,
 		Bytes4,
 		Bytes8,
 		Bytes16,

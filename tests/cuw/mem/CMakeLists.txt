@@ -3,6 +3,9 @@ set(common_src dummy_alloc.hpp utils.hpp)
 add_executable(test_alloc_descr test_alloc_descr.cpp ${common_src})
 target_link_libraries(test_alloc_descr cuw)
 
+add_executable(test_alloc_entries test_alloc_entries.cpp ${common_src})
+target_link_libraries(test_alloc_entries cuw)
+
 add_executable(test_mem_api test_mem_api.cpp ${common_src})
 target_link_libraries(test_mem_api cuw)
 
