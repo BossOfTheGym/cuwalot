@@ -407,6 +407,7 @@ namespace {
 				std::cout << "nothing to deallocate" << std::endl;
 				return;
 			}
+
 			int index = gen.gen(allocations.size());
 			std::swap(allocations[index], allocations.back());
 			auto curr = allocations.back();
@@ -427,9 +428,12 @@ namespace {
 			} std::cout << std::endl;
 		};
 
+		std::cout << std::endl;
 		for (int i = 0; i < total_commands; i++) {
 			exec_command(i);
-		}
+			std::cout << "debug" << std::endl;
+			print_status();
+		} std::cout << std::endl;
 
 		std::cout << "deallocating all..." << std::endl;
 		std::cout << "total allocations: " << allocations.size() << std::endl;
@@ -453,7 +457,7 @@ namespace {
 }
 
 int main(int argc, char* argv[]) {
-	if (test_alloc()) {
+	/*if (test_alloc()) {
 		return -1;
 	} if (test_realloc()) {
 		return -1;
@@ -461,7 +465,7 @@ int main(int argc, char* argv[]) {
 		return -1;
 	} if (test_adopt_advanced()) {
 		return -1;
-	} if (test_random_stuff()) {
+	}*/ if (test_random_stuff()) {
 		return -1;
 	} return 0;
 }

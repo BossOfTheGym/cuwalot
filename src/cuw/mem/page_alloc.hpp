@@ -189,7 +189,7 @@ namespace cuw::mem {
 				fbd_t* fbd1 = fbd_t::size_index_to_descr(curr1);
 				fbd_t* fbd2 = fbd_t::size_index_to_descr(curr2);
 				if (fbd_t::overlap(fbd1, fbd2)) {
-					abort();
+					std::abort();
 				} if (fbd_t::preceds(fbd1, fbd2)) {
 					curr_fbd = fbd1;
 					curr1 = curr1->right;
@@ -239,7 +239,7 @@ namespace cuw::mem {
 				fbd_t* fbd1 = fbd_t::size_index_to_descr(curr1);
 				fbd_t* fbd2 = fbd_t::size_index_to_descr(curr2);
 				if (fbd_t::overlap(fbd1, fbd2)) {
-					abort();
+					std::abort();
 				} if (fbd_t::preceds(fbd1, fbd2)) {
 					curr1 = curr1->right;
 					curr_fbd = merge_fbd(curr_fbd, fbd1);
@@ -344,7 +344,7 @@ namespace cuw::mem {
 			} fbd_t* left = left_node ? fbd_t::addr_index_to_descr(left_node) : nullptr;
 
 			if (left && fbd_t::overlap(&dummy, left) || right && fbd_t::overlap(&dummy, right)) {
-				abort(); // most probably double free
+				std::abort(); // most probably double free
 			}
 
 			bool consumes_left = (left && left->get_end() == dummy.get_start());
@@ -559,6 +559,7 @@ namespace cuw::mem {
 
 		// when we deallocate we check if we require fbd for that as in the case of heavy fragmentation so we don't waste
 		// unneccessary fbds for that
+		// TODO : coalesce info expires.... fuck
 		void deallocate(void* ptr, std::size_t size) {
 			size = align_value(size, page_size);
 
@@ -566,7 +567,7 @@ namespace cuw::mem {
 				if (fbd_t* fbd = try_alloc_fbd(ptr, size)) {
 					insert_free_block(info, fbd);
 				} else {
-					abort(); // we're fucked :D
+					std::abort(); // we're fucked :D
 				}
 			} else {
 				insert_free_block(info, ptr, size);
