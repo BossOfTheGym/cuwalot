@@ -3,8 +3,6 @@
 #include "core.hpp"
 #include "alloc_descr.hpp"
 
-// TODO : under construction
-
 namespace cuw::mem {
 	// now several words about pools:
 	// size = 1, alignment = 1 => pool of pools ... of byte pools

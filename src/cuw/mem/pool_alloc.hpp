@@ -1,7 +1,5 @@
 #pragma once
 
-// NOTE : this file is under construction
-
 #include "core.hpp"
 #include "alloc_tag.hpp"
 #include "block_pool.hpp"

@@ -1,7 +1,5 @@
 #pragma once
 
-// NOTE : this file is under construction
-
 #include <cassert>
 
 #include "core.hpp"

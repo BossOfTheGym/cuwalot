@@ -2,13 +2,13 @@
 Tree-based memory allocator. Utilizes red-black trees. 
 
 # TODO
-**compilation & testing**
-- alloc_descr.hpp
-- alloc_entries.hpp
-- pool_alloc.hpp
-- mem_api for windows
+**testing**
+- page_alloc(random)
+- pool_alloc
 
 **complete TODO**
+- testing in release mode
+- mem_api for windows
 - multithreading
 - test allocator
 - normal unit testing

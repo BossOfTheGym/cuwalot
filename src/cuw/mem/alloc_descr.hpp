@@ -1,8 +1,5 @@
 #pragma once
 
-// NOTE : this file is under construction
-// TODO : rename to alloc_descr_t as it is more appropriate name
-
 #include "core.hpp"
 #include "list_cache.hpp"
 
