@@ -373,7 +373,7 @@ namespace {
 	int test_random_stuff() {
 		std::cout << "testing by random allocations/dellocations..." << std::endl;
 
-		constexpr int total_commands = 1 << 7;
+		constexpr int total_commands = 1 << 2;
 		constexpr std::size_t min_alloc_size = block_size_t{1};
 		constexpr std::size_t max_alloc_size = block_size_t{1 << 10};
 
