@@ -234,8 +234,8 @@ namespace cuw::bst {
 	void traverse_postorder(node_t* root, func_t&& func) {
 		if (root) {
 			auto left = root->left, right = root->right;
-			traverse_postorder(root->left, func);
-			traverse_postorder(root->right, func);
+			traverse_postorder(left, func);
+			traverse_postorder(right, func);
 			func(root);
 		}
 	}
