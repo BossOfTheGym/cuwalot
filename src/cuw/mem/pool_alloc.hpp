@@ -200,8 +200,13 @@ namespace cuw::mem {
 
 	private:
 		template<class int_t>
+		int_t get_min_pool_alignment() {
+			return pool_chunk_size((int_t)base_t::alloc_pool_first_chunk);
+		}
+
+		template<class int_t>
 		void assert_alignment(int_t value) {
-			assert(is_alignment(value) && (int_t)base_t::alloc_min_alignment <= value && value <= (int_t)base_t::get_page_size());
+			assert(is_alignment(value) && get_min_pool_alignment<int_t>() <= value && value <= (int_t)base_t::get_page_size());
 		}
 
 		template<class int_t>
@@ -209,12 +214,7 @@ namespace cuw::mem {
 			assert_alignment(value);
 			if (value == 0) {
 				value = base_t::alloc_base_alignment;
-			} return std::clamp(value, (int_t)base_t::alloc_min_alignment, (int_t)base_t::get_page_size());
-		}
-
-		template<class int_t>
-		int_t get_min_pool_alignment() {
-			return (int_t)pools.begin()->get_chunk_size();
+			} return std::clamp(value, get_min_pool_alignment<int_t>(), (int_t)base_t::get_page_size());
 		}
 
 	private:
