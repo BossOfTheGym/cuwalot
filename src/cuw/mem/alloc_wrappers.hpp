@@ -44,7 +44,7 @@ namespace cuw::mem {
 			auto data_value = (std::uintptr_t)base_t::get_data();
 			if (chunk_value < data_value) {
 				return nullptr;
-			} return (void*)(chunk_value & ~((std::uintptr_t)get_chunk_size() - 1));
+			} return (void*)(((chunk_value - data_value) & ~((std::uintptr_t)get_chunk_size() - 1)) + data_value);
 		}
 
 		inline bool has_chunk(void* addr) const {

@@ -7,9 +7,6 @@
 #include "alloc_wrappers.hpp"
 
 namespace cuw::mem {
-	// TODO : additionally pass alignment
-	// if not then we will fail to get chunk address etc. ...
-	// so adjusted alignment must be passed explicitly into the constructor
 	template<auto check_policy = pool_checks_policy_t::Default>
 	class basic_pool_entry_t : protected alloc_descr_pool_cache_t<check_policy> {
 	public:
@@ -31,10 +28,10 @@ namespace cuw::mem {
 			} return addr_cache.find(addr);
 		}
 
+		// NOTE: data must be aligned beforehand
 		ad_t* create(ad_addr_cache_t& addr_cache, void* block, attrs_t offset, attrs_t size, attrs_t capacity, void* data) {
 			assert(block);
 			assert(data);
-			assert(is_aligned(data, base_t::get_chunk_size())); // alignment check will fail here
 			
 			ad_t* descr = new (block) ad_t {
 				.offset = offset, .size = size,
@@ -145,6 +142,7 @@ namespace cuw::mem {
 			} return addr_cache.find(ptr);
 		}
 
+		// NOTE: data must be aligned beforehand
 		void create(ad_addr_cache_t& addr_cache,
 				void* block, attrs_t offset, attrs_t size, attrs_t alignment, void* data) {
 			assert(block);

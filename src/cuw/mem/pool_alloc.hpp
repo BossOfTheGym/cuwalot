@@ -146,6 +146,7 @@ namespace cuw::mem {
 	template<class base_alloc_t>
 	using pool_alloc_adapter_t = impl::pool_alloc_adapter_t<base_alloc_t, base_alloc_t::use_alloc_cache>;
 
+	// TODO : alignment is adjusted now, maybe it should fail to allocate if alignment is inappropriate?
 	template<class base_alloc_t>
 	class pool_alloc_t : public pool_alloc_adapter_t<base_alloc_t> {
 	public:
@@ -162,7 +163,6 @@ namespace cuw::mem {
 		static_assert(has_sysmem_alloc_tag_v<base_t>);
 
 	private:
-		using pool_bytes_t = byte_pool_entry_t<>;
 		using pool_t = pool_entry_t<>;
 		using raw_bin_t = raw_entry_t<>;
 
@@ -202,6 +202,11 @@ namespace cuw::mem {
 		template<class int_t>
 		int_t get_min_pool_alignment() {
 			return pool_chunk_size((int_t)base_t::alloc_pool_first_chunk);
+		}
+
+		template<class int_t>
+		int_t get_max_alignment() {
+			return std::min<int_t>(base_t::get_page_size(), pool_chunk_size((int_t)base_t::alloc_pool_last_chunk));
 		}
 
 		template<class int_t>
@@ -343,14 +348,14 @@ namespace cuw::mem {
 
 	private:
 		[[nodiscard]] void* alloc42(std::size_t size) {
-			std::size_t alignment = 0;
-			if (size == 0) {
-				size = 1;
-				alignment = get_min_pool_alignment<std::size_t>();
-			} return alloc42(size, alignment);
+			assert(size != 0);
+
+			return alloc42(size, 0);
 		}
 
 		[[nodiscard]] void* alloc42(std::size_t size, std::size_t alignment) {
+			assert(size != 0);
+
 			alignment = adjust_alignment(alignment);
 
 			std::size_t size_aligned = align_value(size, alignment);
@@ -360,12 +365,17 @@ namespace cuw::mem {
 		}
 
 		void free42(void* ptr) {
+			assert(ptr);
+
 			if (ad_t* ad = addr_cache.find(ptr)) {
 				free42(ad, ptr);
 			} std::abort();
 		}
 
 		void free42(ad_t* ad, void* ptr) {
+			assert(ad);
+			assert(ptr);
+
 			using enum block_type_t;
 
 			switch (block_type_t{ad->get_type()}) {
@@ -385,6 +395,9 @@ namespace cuw::mem {
 		}
 
 		void free42(void* ptr, std::size_t size, std::size_t alignment) {
+			assert(ptr);
+			assert(size != 0);
+
 			alignment = adjust_alignment(alignment);
 
 			std::size_t size_aligned = align_value(size, alignment);
@@ -394,6 +407,9 @@ namespace cuw::mem {
 		}
 
 		[[nodiscard]] void* realloc42(void* old_ptr, std::size_t new_size) {
+			assert(old_ptr);
+			assert(new_size != 0);
+
 			using enum block_type_t;
 
 			ad_t* ad = addr_cache.find(old_ptr);
@@ -419,6 +435,9 @@ namespace cuw::mem {
 		}
 
 		[[nodiscard]] void* realloc42(void* old_ptr, std::size_t old_size, std::size_t alignment, std::size_t new_size) {
+			assert(old_size != 0)
+			assert(new_size != 0);
+
 			alignment = adjust_alignment(alignment);
 
 			std::size_t old_size_aligned = align_value(old_size, alignment);
@@ -476,8 +495,14 @@ namespace cuw::mem {
 			return realloc_raw(old_ptr, old_size, alignment, new_size);
 		}
 
+		// zero_alloc logically has any alignment but practically it has minimal possible alignment
+		// it means that you can realloc zero allocation to any alignment
 		[[nodiscard]] void* zero_alloc() {
-			return alloc42(0); // yes, simple as that
+			return alloc42(1, get_min_pool_alignment<std::size_t>());
+		}
+
+		void free_zero(void* ptr) {
+			free42(ptr, 1, get_min_pool_alignment<std::size_t>());
 		}
 
 	public: // standart API
@@ -509,8 +534,15 @@ namespace cuw::mem {
 			} return alloc42(size, alignment);
 		}
 
+		// alignment and flags must match alignment and flags of old_ptr
 		[[nodiscard]] void* realloc(void* ptr, std::size_t old_size, std::size_t new_size, std::size_t alignment, flags_t flags = 0) {
 			if (!ptr) {
+				return malloc(new_size, alignment, flags);
+			} if (old_size == 0) {
+				if (new_size == 0) {
+					return ptr;
+				}
+				free_zero(ptr);
 				return malloc(new_size, alignment, flags);
 			} if (new_size == 0) {
 				free42(ptr, old_size, alignment, flags);
@@ -518,9 +550,13 @@ namespace cuw::mem {
 			} return realloc42(ptr, old_size, new_size, alignment);
 		}
 
+		// alignment and flags must be same as used with malloc()
+		// you cannot free memory allocated via standart malloc/realloc
 		void free(void* ptr, std::size_t size, std::size_t alignment, flags_t flags = 0) {
 			if (!ptr) {
 				return;
+			} if (size == 0) {
+				free_zero(size);
 			} return free42(ptr, size, alignment);
 		}
 
