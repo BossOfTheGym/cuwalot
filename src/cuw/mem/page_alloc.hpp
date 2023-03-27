@@ -153,6 +153,7 @@ namespace cuw::mem {
 		page_alloc_t& operator = (const page_alloc_t&) = delete;
 		page_alloc_t& operator = (page_alloc_t&&) = delete;
 
+		// this function does not modify index
 		// TODO : two strategies : flatten-merge-rebuild and insert-from-another 
 		void adopt(page_alloc_t& another) {
 			assert(page_size == another.page_size); // a little bit redundant
@@ -280,6 +281,7 @@ namespace cuw::mem {
 			release_empty_pools();
 		}
 
+		// this function does not modify index
 		// mostly for debugging purpose
 		void release_mem() {
 			bst::traverse_inorder(free_blocks_addr, [&] (addr_index_t* addr_index) {
@@ -294,11 +296,13 @@ namespace cuw::mem {
 			});
 		}
 
+		// this function does not modify index
 		// mostly for debugging purpose
 		auto get_size_index() const {
 			return bst::tree_wrapper_t{free_blocks_size};
 		}
 
+		// this function does not modify index
 		// mostly for debugging purpose
 		auto get_addr_index() const {
 			return bst::tree_wrapper_t{free_blocks_addr};
@@ -317,6 +321,7 @@ namespace cuw::mem {
 			bool consumes_right{};
 		};
 
+		// this function does not modify index 
 		// O(2*log(n)) at worst
 		coalesce_info_t get_coalesce_info(void* ptr, std::size_t size) {
 			assert(ptr);
@@ -354,7 +359,9 @@ namespace cuw::mem {
 		}
 
 		// ... in between theese calls allocate fbd in any way (if it's required) ...
+		// ... and be careful when some code modifies index in between this calls as coalesce_info_t gets invalidated ...
 
+		// this function modifies index
 		// fbd must be dummy (must not be acquired by appropriate call but used via dummy variable on stack like in get_coalesce_info)
 		//
 		// if we dont require an fbd allocation(is_dummy can be true):
@@ -395,11 +402,13 @@ namespace cuw::mem {
 			}
 		}
 
+		// this function modifies index
 		// inserted block must be true allocated fbd
 		void insert_free_block(const coalesce_info_t& info, fbd_t* block) {
 			insert_free_block(info, block, false);
 		}
 
+		// this function modifies index
 		// block will coalesce with some of the neighbours, we can use dummy fbd 
 		void insert_free_block(const coalesce_info_t& info, void* data, std::size_t size) {
 			fbd_t dummy{ .size = size, .data = data };
@@ -407,18 +416,22 @@ namespace cuw::mem {
 		}
 
 	private:
+		// this function does not modify index
 		[[nodiscard]] fbd_t* acquire_fbd(void* data, std::size_t size) {
 			return fbd_entry.acquire(data, size);
 		}
 
+		// this function does not modify index
 		void release_fbd(fbd_t* block) {
 			fbd_entry.release(block);
 		}
 
+		// this function does not modify index
 		void extend_fbd(void* block_ptr, std::size_t size) {
 			fbd_entry.create_pool(block_ptr, size);
 		}
 
+		// this function modifies index
 		void release_empty_pools() {
 			// we try this only once, it is possible that some of the blocks can be freed without fbd allocation
 			// after the first pass etc..
@@ -449,6 +462,7 @@ namespace cuw::mem {
 		}
 
 	private:
+		// this function modifies index
 		// fbd is already in the index
 		[[nodiscard]] void* bite_free_block(fbd_t* block, std::size_t size) {
 			assert(is_aligned(size, page_size));
@@ -465,6 +479,7 @@ namespace cuw::mem {
 			} return ptr;
 		}
 
+		// this function modifies index
 		[[nodiscard]] void* try_alloc_from_existing(std::size_t size) {
 			assert(is_aligned(size, page_size));
 
@@ -473,6 +488,7 @@ namespace cuw::mem {
 			} return nullptr;
 		}
 
+		// this function modifies index
 		// always allocates fbd for the remaining memory as a simplification
 		// as a fallback tries to allocate smaller memory region in case of failure
 		[[nodiscard]] void* try_alloc_by_extend(std::size_t size) {
@@ -506,6 +522,7 @@ namespace cuw::mem {
 			}
 		}
 
+		// this function modifies index
 		[[nodiscard]] void* try_alloc_memory(std::size_t size) {
 			assert(is_aligned(size, page_size));
 
@@ -514,6 +531,7 @@ namespace cuw::mem {
 			} return try_alloc_by_extend(size);
 		}
 
+		// this function modifies index
 		// as a fallback tries to allocate smaller memory region in case of failure
 		[[nodiscard]] bool try_extend_fbd() {
 			std::size_t size = block_pool_size;
@@ -533,11 +551,12 @@ namespace cuw::mem {
 			std::size_t rest_size = size_ext - size;
 			if (rest_size != 0) {
 				auto info = get_coalesce_info(rest_ptr, rest_size);
-				auto fbd = acquire_fbd(rest_ptr, rest_size);
+				auto fbd = acquire_fbd(rest_ptr, rest_size); // guaranteed to exist
 				insert_free_block(info, fbd);
 			} return true;
 		}
 
+		// this function modifies index
 		[[nodiscard]] fbd_t* try_alloc_fbd(void* data, std::size_t size) {
 			assert(data);
 			assert(is_aligned(size, page_size));
@@ -553,19 +572,20 @@ namespace cuw::mem {
 		}
 
 	public:
+		// this function modifies index
 		[[nodiscard]] void* allocate(std::size_t size) {
 			return try_alloc_memory(align_value(size, page_size));
 		}
 
+		// this function modifies index
 		// when we deallocate we check if we require fbd for that as in the case of heavy fragmentation so we don't waste
 		// unneccessary fbds for that
-		// TODO : coalesce info expires.... fuck
 		void deallocate(void* ptr, std::size_t size) {
 			size = align_value(size, page_size);
 
 			if (auto info = get_coalesce_info(ptr, size); info.requires_fbd_alloc()) {
 				if (fbd_t* fbd = try_alloc_fbd(ptr, size)) {
-					insert_free_block(info, fbd);
+					insert_free_block(get_coalesce_info(ptr, size), fbd); // info can expire
 				} else {
 					std::abort(); // we're fucked :D
 				}
@@ -574,6 +594,7 @@ namespace cuw::mem {
 			}
 		}
 
+		// this function modifies index
 		[[nodiscard]] void* reallocate(void* old_ptr, std::size_t old_size, std::size_t new_size) {
 			std::size_t old_size_aligned = align_value(old_size, page_size);
 			std::size_t new_size_aligned = align_value(new_size, page_size);
@@ -587,7 +608,7 @@ namespace cuw::mem {
 				std::size_t delta = old_size_aligned - new_size_aligned;
 				if (auto info = get_coalesce_info(old_ptr_end, delta); info.requires_fbd_alloc()) {
 					if (fbd_t* fbd = try_alloc_fbd(old_ptr_end, delta)) {
-						insert_free_block(info, fbd);
+						insert_free_block(get_coalesce_info(old_ptr_end, delta), fbd);
 						return old_ptr;
 					} return nullptr;
 				} else {
@@ -607,25 +628,28 @@ namespace cuw::mem {
 					return old_ptr;
 				}
 			} if (void* new_ptr = this_t::allocate(new_size)) {
-				memcpy(new_ptr, old_ptr, old_size);
+				std::memcpy(new_ptr, old_ptr, old_size);
 				this_t::deallocate(old_ptr, old_size);
 				return new_ptr;
 			} return nullptr;
 		}
 
-	
+		// this function does not modify index
 		std::size_t get_true_size(std::size_t size) {
 			return align_value(size, page_size);
 		}
 
+		// this function does not modify index
 		std::size_t get_page_size() const {
 			return page_size;
 		}
 
+		// this function does not modify index
 		std::size_t get_block_pool_size() const {
 			return block_pool_size;
 		}
 
+		// this function does not modify index
 		std::size_t get_min_block_size() const {
 			return min_block_size;
 		}

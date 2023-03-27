@@ -373,7 +373,7 @@ namespace {
 	int test_random_stuff() {
 		std::cout << "testing by random allocations/dellocations..." << std::endl;
 
-		constexpr int total_commands = 1 << 2;
+		constexpr int total_commands = 1 << 8;
 		constexpr std::size_t min_alloc_size = block_size_t{1};
 		constexpr std::size_t max_alloc_size = block_size_t{1 << 10};
 
@@ -384,9 +384,9 @@ namespace {
 		std::vector<allocation_t> allocations;
 
 		auto print_status = [&] () {
-			std::cout << "-addr_index" << std::endl << addr_index_info_t{alloc} << std::endl;
-			std::cout << "-size_index" << std::endl << size_index_info_t{alloc} << std::endl;
-			std::cout << "-ranges" << std::endl << ranges_info_t{alloc} << std::endl;
+			std::cout << "-addr_index" << std::endl << addr_index_info_t{alloc};
+			std::cout << "-size_index" << std::endl << size_index_info_t{alloc};
+			std::cout << "-ranges" << std::endl << ranges_info_t{alloc};
 		};
 
 		auto try_allocate = [&] () {
@@ -431,8 +431,6 @@ namespace {
 		std::cout << std::endl;
 		for (int i = 0; i < total_commands; i++) {
 			exec_command(i);
-			std::cout << "debug" << std::endl;
-			print_status();
 		} std::cout << std::endl;
 
 		std::cout << "deallocating all..." << std::endl;
