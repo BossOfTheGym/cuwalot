@@ -74,7 +74,6 @@ namespace cuw::mem {
 
 	enum block_type_t : attrs_t {
 		Pool = 0, // pool of chunks
-		PoolBytes, // byte pool
 		Raw, // raw allocation: this is just continious block of memory
 	};
 

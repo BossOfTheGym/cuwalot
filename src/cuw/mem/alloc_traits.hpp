@@ -226,24 +226,34 @@ namespace cuw::mem {
 				enable_option_t<pool_chunk_size_t, decltype(alloc_traits_t::alloc_pool_last_chunk)>
 			>
 		> {
-			static constexpr pool_chunk_size_t _alloc_pool_first_chunk = alloc_traits_t::alloc_pool_first_chunk;
-			static constexpr pool_chunk_size_t _alloc_pool_last_chunk = alloc_traits_t::alloc_pool_last_chunk;
-			static_assert((attrs_t)_alloc_pool_first_chunk <= (attrs_t)_alloc_pool_last_chunk);
+			static constexpr pool_chunk_size_t alloc_pool_first_chunk = alloc_traits_t::alloc_pool_first_chunk;
+			static constexpr pool_chunk_size_t alloc_pool_last_chunk = alloc_traits_t::alloc_pool_last_chunk;
+			static_assert((attrs_t)alloc_pool_first_chunk <= (attrs_t)alloc_pool_last_chunk);
 		};
 
 		template<class alloc_traits_t, class = void>
 		struct alloc_raw_bins_specs_t {
-			static constexpr attrs_t alloc_raw_base_size = max_pool_chunk_size<attrs_t>(); 
+		private:
+			static constexpr pool_chunk_size_t _alloc_pool_last_chunk = alloc_pool_specs_t<alloc_traits_t>::alloc_pool_last_chunk;
+		public:
+			static constexpr attrs_t alloc_raw_base_size = pool_chunk_size((attrs_t)_alloc_pool_last_chunk);
 			static constexpr attrs_t alloc_total_raw_bins = default_total_raw_bins;
 		};
 
 		template<class alloc_traits_t>
 		struct alloc_raw_bins_specs_t<alloc_traits_t,
-			std::void_t<enable_option_t<attrs_t, decltype(alloc_traits_t::alloc_total_raw_bins)>>> {
+			std::void_t<
+				enable_option_t<attrs_t, decltype(alloc_traits_t::alloc_raw_base_size)>,
+				enable_option_t<attrs_t, decltype(alloc_traits_t::alloc_total_raw_bins)>
+			>
+		> {
+		private:
+			static constexpr pool_chunk_size_t _alloc_pool_last_chunk = alloc_pool_specs_t<alloc_traits_t>::alloc_pool_last_chunk;
+		public:
 			static constexpr attrs_t alloc_raw_base_size = alloc_traits_t::alloc_raw_base_size;
 			static constexpr attrs_t alloc_total_raw_bins = alloc_traits_t::alloc_total_raw_bins;
 			static_assert(alloc_total_raw_bins != 0);
-			static_assert(alloc_raw_base_size >= max_pool_chunk_size<attrs_t>());
+			static_assert(alloc_raw_base_size >= pool_chunk_size((attrs_t)_alloc_pool_last_chunk));
 		};
 	}
 

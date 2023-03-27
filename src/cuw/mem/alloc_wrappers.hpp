@@ -11,69 +11,6 @@ namespace cuw::mem {
 	// for single allocation pool_chunk_size becomes alignment
 	// each pool can store not more than 2^14 - 1 chunks
 
-	// 16 bytes
-	// we continiously peek chunk from the main pool until it's exausted (consider it free) then we acquire (allocate) it
-	// if we free some chunk from byte pool then pool is returned into the main pool and considered free again  
-	// next: pointer to the next small pool
-	// mask: mask where set bit means that appropriate chunk is allocated
-	// last 4 most significant bits are not used(occupied by next and mask themselves)
-	// this is little bit controversial but this pool stores chunks of 16 bytes so it make 12 times more allocations
-	// than ordinary pool
-	// chunks : 1 byte memory to allocate
-	class byte_pool_t {
-	public:
-		static inline constexpr std::size_t hdr_size = 4;
-		static inline constexpr std::size_t max_chunks = 12;
-
-		byte_pool_t(std::uint16_t next) : hdr{next}, mask{} {}
-
-		inline std::uint16_t get_chunk_index(void* chunk) {
-			assert(has_addr(chunk));
-			return (std::uint16_t)((uint8_t*)chunk - &chunks[0]);
-		}
-
-		[[nodiscard]] inline void* acquire_chunk() {
-			if (int index = std::countr_one(mask); index < max_chunks) {
-				mask |= 1 << index;
-				return &chunks[index];
-			} return nullptr;
-		}
-
-		inline void* peek_chunk() {
-			if (int index = std::countr_one(mask); index < max_chunks) {
-				return &chunks[index];
-			} return nullptr;
-		}
-
-		inline void release_chunk(void* chunk) {
-			assert(has_addr(chunk));
-			mask &= ~((std::uint16_t)1 << get_chunk_index(chunk));
-		}
-
-		inline bool has_addr(void* addr) const {
-			auto data_value = (std::uintptr_t)(&chunks[0]);
-			auto addr_value = (std::uintptr_t)addr;
-			return data_value <= addr_value && addr_value < data_value + max_chunks;
-		}
-
-		inline bool has_chunk(void* chunk) const {
-			return has_addr(chunk);
-		}
-
-		inline bool empty() const {
-			return mask == 0x0000;
-		}
-
-		inline bool full() const {
-			return mask == 0x0FFF;
-		}
-
-	private:
-		pool_hdr_t hdr{}; // TODO: how to... properly.... assign this via indirect memory write
-		std::uint16_t mask{};
-		std::uint8_t chunks[max_chunks]{};
-	};
-
 	// pool_chunk is power of two
 	// chunk_enum is logi(pool_chunk)
 	class pool_ops_t : public alloc_descr_wrapper_t {
@@ -183,65 +120,6 @@ namespace cuw::mem {
 	};
 
 	using pool_wrapper_t = basic_pool_wrapper_t;
-
-	class byte_pool_wrapper_t : public basic_pool_wrapper_t {
-	public:
-		using base_t = basic_pool_wrapper_t;
-		using ad_t = alloc_descr_t;
-
-		inline byte_pool_wrapper_t(ad_t* descr, attrs_t dummy = 0) : base_t(descr, type_to_pool_chunk<byte_pool_t, attrs_t>()) {}
-
-	private:
-		// adds next unused chunk into list, as a side effect, it will be possible to peek this chunk
-		[[nodiscard]] inline byte_pool_t* try_use_pool() {
-			if (base_t::has_capacity()) {
-				attrs_t new_head = base_t::inc_used();
-				void* chunk = base_t::get_chunk_memory(new_head);
-				auto* pool = new (chunk) byte_pool_t(base_t::get_head());
-				base_t::set_head(new_head);
-				return pool;
-			} return nullptr;
-		}
-
-	public:
-		inline void* acquire_chunk() {
-			auto try_acquire_chunk = [&] (auto* byte_pool) {
-				assert(byte_pool);
-				void* chunk = byte_pool->acquire_chunk();
-				if (byte_pool->full()) {
-					base_t::acquire_chunk();
-				} return chunk;
-			};
-
-			if (auto* byte_pool = (byte_pool_t*)base_t::peek_chunk()) {
-				return try_acquire_chunk(byte_pool);
-			} if (auto* byte_pool = try_use_pool()) {
-				return try_acquire_chunk(byte_pool); // initialize pool
-			} return nullptr;
-		}
-
-		inline void* peek_chunk() const {
-			if (auto* pool = (byte_pool_t*)base_t::peek_chunk()) {
-				return pool->peek_chunk();
-			} return nullptr;
-		}
-
-		inline void release_chunk(void* chunk) {
-			if (auto* pool = (byte_pool_t*)base_t::refine_chunk_memory(chunk)) {
-				bool was_full = pool->full();
-				pool->release_chunk(chunk);
-				if (was_full) {
-					base_t::release_chunk(pool);
-				}
-			}
-		}
-
-		inline bool has_chunk(void* chunk) const {
-			if (auto* pool = (byte_pool_t*)base_t::refine_chunk_memory(chunk)) {
-				return pool->has_chunk(chunk);
-			} return false;
-		}
-	};
 
 	class raw_wrapper_t {
 	public:

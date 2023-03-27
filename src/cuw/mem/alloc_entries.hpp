@@ -7,6 +7,9 @@
 #include "alloc_wrappers.hpp"
 
 namespace cuw::mem {
+	// TODO : additionally pass alignment
+	// if not then we will fail to get chunk address etc. ...
+	// so adjusted alignment must be passed explicitly into the constructor
 	template<auto check_policy = pool_checks_policy_t::Default>
 	class basic_pool_entry_t : protected alloc_descr_pool_cache_t<check_policy> {
 	public:
@@ -31,7 +34,7 @@ namespace cuw::mem {
 		ad_t* create(ad_addr_cache_t& addr_cache, void* block, attrs_t offset, attrs_t size, attrs_t capacity, void* data) {
 			assert(block);
 			assert(data);
-			assert(is_aligned(data, base_t::get_chunk_size()));
+			assert(is_aligned(data, base_t::get_chunk_size())); // alignment check will fail here
 			
 			ad_t* descr = new (block) ad_t {
 				.offset = offset, .size = size,
@@ -109,29 +112,6 @@ namespace cuw::mem {
 
 		pool_entry_t(pool_chunk_size_t chunk_enum = pool_chunk_size_t::Empty)
 			: base_t{(attrs_t)chunk_enum, (attrs_t)block_type_t::Pool} {}
-
-		[[nodiscard]] void* acquire() {
-			return base_t::template acquire<wrapper_t>();
-		}
-
-		[[nodiscard]] ad_t* release(ad_addr_cache_t& addr_cache, void* ptr, int cache_lookups) {
-			return base_t::template release<wrapper_t>(addr_cache, ptr, cache_lookups);
-		}
-
-		[[nodiscard]] ad_t* release(void* ptr, ad_t* descr) {
-			return base_t::template release<wrapper_t>(ptr, descr);
-		}
-	};
-
-	template<auto check_policy = pool_checks_policy_t::Default>
-	class byte_pool_entry_t : public basic_pool_entry_t<check_policy> {
-	public:
-		using base_t = basic_pool_entry_t<check_policy>;
-		using ad_t = alloc_descr_t;
-		using ad_addr_cache_t = alloc_descr_addr_cache_t;
-		using wrapper_t = byte_pool_wrapper_t;
-
-		byte_pool_entry_t() : base_t{type_to_pool_chunk<byte_pool_t, attrs_t>(), (attrs_t)block_type_t::PoolBytes} {}
 
 		[[nodiscard]] void* acquire() {
 			return base_t::template acquire<wrapper_t>();

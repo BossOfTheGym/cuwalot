@@ -8,7 +8,6 @@ Tree-based memory allocator. Utilizes red-black trees.
 
 **complete TODO**
 - testing in release mode
-- remove byte_pool
 - mem_api for windows
 - multithreading
 - test allocator

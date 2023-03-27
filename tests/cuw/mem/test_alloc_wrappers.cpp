@@ -50,123 +50,6 @@ namespace {
 		ad_t descr{};
 	};
 
-	test_ad_t create_byte_pool(std::size_t size, void* data) {
-		return test_ad_t((attrs_t)mem::block_type_t::PoolBytes, mem::type_to_pool_chunk<mem::byte_pool_t, attrs_t>(), sizeof(mem::byte_pool_t), size, data);
-	}
-
-	int test_byte_pool_wrapper() {
-		constexpr std::size_t total_chunks = 4;
-		constexpr std::size_t total_size = total_chunks * sizeof(mem::byte_pool_t); 
-		constexpr std::size_t allocs_per_pool = mem::byte_pool_t::max_chunks;
-		constexpr std::size_t total_allocs = total_chunks * allocs_per_pool;
-
-		alignas(sizeof(mem::byte_pool_t)) std::uint8_t chunks[total_size] = {};
-
-		std::uint8_t* allocated[total_allocs] = {};
-
-		std::size_t size = total_size;
-		test_ad_t test_ad = create_byte_pool(size, chunks);
-		mem::byte_pool_wrapper_t wrapper(test_ad);
-
-		auto allocate = [&] (auto& chunk, auto check) {
-			chunk = (std::uint8_t*)wrapper.acquire_chunk();
-			if (!chunk) {
-				std::cerr << "something went wrong..." << std::endl;
-				std::abort();
-			}
-			std::cout << "allocated: " << (void*)chunk << std::endl;
-			*chunk = check;
-		};
-
-		auto deallocate = [&] (auto& chunk, auto check) {
-			if (*chunk != check) {
-				std::cerr << "invalid check value" << std::endl;
-				std::abort();
-			}
-			std::cout << "deallocating: " << (void*)chunk << std::endl;
-			wrapper.release_chunk(chunk);
-			chunk = nullptr;
-		};
-
-		auto check_invalid_allocation = [&] () {
-			if (void* chunk = wrapper.acquire_chunk()) {
-				std::cerr << "wrong!" << std::endl;
-				std::abort();
-			}
-		};
-
-		std::cout << "testing byte_pool_wrapper" << std::endl;
-
-		std::cout << "allocating all..." << std::endl;
-		for (int i = 0; i < total_allocs; i++) {
-			allocate(allocated[i], i);
-		} std::cout << std::endl;
-		
-		check_invalid_allocation();
-
-		std::cout << "deallocating all..." << std::endl; 
-		for (int i = 0; i < total_allocs; i++) {
-			deallocate(allocated[i], i);
-		} std::cout << std::endl;
-
-		std::cout << "allocating all..." << std::endl;
-		for (int i = 0; i < total_allocs; i++) {
-			allocate(allocated[i], i);
-		} std::cout << std::endl;
-
-		check_invalid_allocation();
-
-		std::cout << "deallocating even chunks..." << std::endl;
-		for (int i = 0; i < total_allocs; i += 2) {
-			deallocate(allocated[i], i);
-		} std::cout << std::endl;
-
-		std::cout << "deallocating odd chunks..." << std::endl;
-		for (int i = 1; i < total_allocs; i += 2) {
-			deallocate(allocated[i], i);
-		} std::cout << std::endl;
-
-		std::cout << "allocating all..." << std::endl;
-		for (int i = 0; i < total_allocs; i++) {
-			allocate(allocated[i], i);
-		} std::cout << std::endl;
-
-		check_invalid_allocation();
-
-		std::cout << "deallocating even pools..." << std::endl;
-		for (int k = 0; k < total_chunks; k += 2) {
-			for (int i = 0; i < allocs_per_pool; i++) {
-				int index = k * allocs_per_pool + i;
-				deallocate(allocated[index], index);
-			}
-		} std::cout << std::endl;
-
-		std::cout << "deallocating odd pools..." << std::endl;
-		for (int k = 1; k < total_chunks; k += 2) {
-			for (int i = 0; i < allocs_per_pool; i++) {
-				int index = k * allocs_per_pool + i;
-				deallocate(allocated[index], index);
-			}
-		} std::cout << std::endl;
-
-		std::cout << "allocating all..." << std::endl;
-		for (int i = 0; i < total_allocs; i++) {
-			allocate(allocated[i], i);
-		} std::cout << std::endl;
-		
-		check_invalid_allocation();
-
-		std::cout << "deallocating all..." << std::endl; 
-		for (int i = 0; i < total_allocs; i++) {
-			deallocate(allocated[i], i);
-		} std::cout << std::endl;
-
-		std::cout << "final memory view: " << std::endl << mem_view_t{chunks, total_size} << std::endl;
-		std::cout << "Congratulations! We didn't crash! Ya-ah-ay!" << std::endl;
-
-		return 0;
-	}
-
 	test_ad_t create_pool(mem::pool_chunk_size_t chunk_size, std::size_t size, void* data) {
 		return test_ad_t((attrs_t)mem::block_type_t::Pool, (attrs_t)chunk_size, mem::pool_chunk_size((attrs_t)chunk_size), size, data);
 	}
@@ -284,9 +167,7 @@ namespace {
 }
 
 int main() {
-	if (test_byte_pool_wrapper()) {
-		return -1;
-	} if (test_pool_wrapper()) {
+	if (test_pool_wrapper()) {
 		return -1;
 	} return 0;
 }
