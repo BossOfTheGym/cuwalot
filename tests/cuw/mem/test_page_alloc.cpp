@@ -455,7 +455,7 @@ namespace {
 }
 
 int main(int argc, char* argv[]) {
-	/*if (test_alloc()) {
+	if (test_alloc()) {
 		return -1;
 	} if (test_realloc()) {
 		return -1;
@@ -463,7 +463,7 @@ int main(int argc, char* argv[]) {
 		return -1;
 	} if (test_adopt_advanced()) {
 		return -1;
-	}*/ if (test_random_stuff()) {
+	} if (test_random_stuff()) {
 		return -1;
 	} return 0;
 }
