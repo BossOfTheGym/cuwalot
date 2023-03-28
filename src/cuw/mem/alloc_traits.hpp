@@ -210,8 +210,12 @@ namespace cuw::mem {
 		private:
 			static constexpr std::size_t _alloc_min_slot_size = alloc_min_slot_size_t<alloc_traits_t>::alloc_min_slot_size;
 			static constexpr std::size_t _alloc_min_pool_size = alloc_min_pool_size_t<alloc_traits_t>::alloc_min_pool_size;
-			static_assert(_alloc_min_slot_size >= _alloc_min_pool_size);
+		public:
+			static constexpr bool check = _alloc_min_slot_size >= _alloc_min_pool_size;
 		};
+
+		template<class alloc_traits_t>
+		inline constexpr bool check_alloc_cache_v = check_alloc_cache_t<alloc_traits_t>::check;
 
 		template<class alloc_traits_t, class = void>
 		struct alloc_pool_specs_t {
@@ -257,13 +261,10 @@ namespace cuw::mem {
 		};
 	}
 
-	// all utilities above deduce all missing properties from traits_t parameter
-	// so... you must define all dependencies in traits_t if you want to work them as intended
-	// yes, you can inherit from several *_alloc_traits_t but be careful not to meet ambiguity
-	struct empty_traits_t{};
+	struct empty_traits_t {};
 
 	template<class traits_t>
-	struct page_alloc_traits_t : traits_t {
+	struct page_alloc_traits_t : public traits_t {
 		static constexpr bool use_resolved_page = impl::use_resolved_page_size_t<traits_t>::use_resolved_page_size;
 		static constexpr std::size_t alloc_page_size = impl::alloc_page_size_t<traits_t>::alloc_page_size;
 		static constexpr std::size_t alloc_block_pool_size = impl::alloc_block_pool_size_t<traits_t>::alloc_block_pool_size;
@@ -271,7 +272,7 @@ namespace cuw::mem {
 	};
 
 	template<class traits_t>
-	struct cached_alloc_traits_t : traits_t {
+	struct cached_alloc_traits_t : public traits_t {
 		static constexpr std::size_t alloc_cache_slots = impl::alloc_cache_slots_t<traits_t>::alloc_cache_slots;
 		static constexpr std::size_t alloc_min_slot_size = impl::alloc_min_slot_size_t<traits_t>::alloc_min_slot_size;
 		static constexpr std::size_t alloc_max_slot_size = impl::alloc_max_slot_size_t<traits_t>::alloc_max_slot_size;
@@ -279,7 +280,7 @@ namespace cuw::mem {
 	};
 
 	template<class traits_t>
-	struct pool_alloc_traits_t : traits_t {
+	struct pool_alloc_traits_t : public traits_t {
 		static constexpr std::size_t alloc_min_pool_power = impl::alloc_min_pool_power_t<traits_t>::alloc_min_pool_power;
 		static constexpr std::size_t alloc_min_pool_size = impl::alloc_min_pool_size_t<traits_t>::alloc_min_pool_size;
 		static constexpr std::size_t alloc_max_pool_power = impl::alloc_max_pool_power_t<traits_t>::alloc_maX_pool_power;
@@ -293,7 +294,6 @@ namespace cuw::mem {
 		static constexpr std::size_t alloc_raw_base_size = impl::alloc_raw_bins_specs_t<traits_t>::alloc_raw_base_size;
 		static constexpr std::size_t alloc_total_raw_bins = impl::alloc_raw_bins_specs_t<traits_t>::alloc_total_raw_bins;
 
-		// TODO : 
-		//impl::check_alloc_cache_t<traits_t>
+		static_assert(impl::check_alloc_cache_v<traits_t>);
 	};
 }
