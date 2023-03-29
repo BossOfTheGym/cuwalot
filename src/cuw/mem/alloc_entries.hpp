@@ -17,6 +17,14 @@ namespace cuw::mem {
 		basic_pool_entry_t(attrs_t chunk_enum, attrs_t type) : base_t(chunk_enum, type) {}
 
 	public:
+		attrs_t get_chunk_size() const {
+			return base_t::get_chunk_size();
+		}
+
+		attrs_t get_chunk_enum() const {
+			return base_t::get_chunk_enum();
+		}
+
 		// size, capacity
 		std::tuple<attrs_t, attrs_t> get_next_pool_params(attrs_t min_pools, attrs_t max_pools) const {
 			return base_t::get_next_pool_params(min_pools, max_pools);
@@ -70,8 +78,9 @@ namespace cuw::mem {
 		template<class wrapper_t>
 		[[nodiscard]] ad_t* release(void* ptr, ad_t* descr) {
 			wrapper_t pool(descr, base_t::get_chunk_size_enum());
-			// doesn't work for byte_pool_t, yes, we must either get rid of byte_pool_t completely or comment out this check
-			//assert(!pool.empty());
+
+			assert(!pool.empty());
+			
 			pool.release_chunk(ptr);
 			base_t::reinsert_free(descr);
 			return pool.empty() ? descr : nullptr;

@@ -77,7 +77,7 @@ namespace cuw::trb {
 		assert(node);
 
 		auto [lb, prev] = bst::search_insert_lb(root, kops, kops.get_key(node));
-		return insert_lb_hint(root, node, prev, std::forward<key_ops_t>(kops));
+		return insert_lb_hint(root, node, prev, kops);
 	}
 
 	// element will be inserted at the end of the range of equal elements
@@ -109,7 +109,7 @@ namespace cuw::trb {
 		assert(node);
 
 		node_t* prev = bst::search_insert_ub(root, kops, kops.get_key(node));
-		return insert_ub_hint(root, node, prev, std::forward<key_ops_t>(kops));
+		return insert_ub_hint(root, node, prev, kops);
 	}
 
 	// insert node after given node, so tree order will be ... -> after -> node -> ...

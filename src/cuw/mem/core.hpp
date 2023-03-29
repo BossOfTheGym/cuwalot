@@ -34,6 +34,7 @@ namespace cuw::mem {
 	inline constexpr attrs_t max_alloc_size = ((attrs_t)1 << max_alloc_bits) - 1;
 	inline constexpr attrs_t alloc_descr_head_empty = max_pool_chunks;
 
+	inline constexpr std::size_t block_align_pow = 6;
 	inline constexpr std::size_t block_align = 64;
 
 	inline constexpr bool default_use_resolved_page_size = false;

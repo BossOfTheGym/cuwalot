@@ -62,7 +62,6 @@ namespace cuw::mem {
 		template<class alloc_traits_t, class = void>
 		struct alloc_min_pool_power_t {
 			static constexpr attrs_t alloc_min_pool_power = default_min_pool_power;
-			static constexpr attrs_t alloc_min_pool_size = (attrs_t)1 << alloc_min_pool_power;
 		};
 
 		template<class alloc_traits_t>
@@ -208,6 +207,7 @@ namespace cuw::mem {
 		template<class alloc_traits_t>
 		struct check_alloc_cache_t {
 		private:
+			static constexpr bool _use_alloc_cache = use_alloc_cache_t<alloc_traits_t>::use_alloc_cache;
 			static constexpr std::size_t _alloc_min_slot_size = alloc_min_slot_size_t<alloc_traits_t>::alloc_min_slot_size;
 			static constexpr std::size_t _alloc_min_pool_size = alloc_min_pool_size_t<alloc_traits_t>::alloc_min_pool_size;
 		public:
@@ -266,6 +266,7 @@ namespace cuw::mem {
 	template<class traits_t>
 	struct page_alloc_traits_t : public traits_t {
 		static constexpr bool use_resolved_page = impl::use_resolved_page_size_t<traits_t>::use_resolved_page_size;
+
 		static constexpr std::size_t alloc_page_size = impl::alloc_page_size_t<traits_t>::alloc_page_size;
 		static constexpr std::size_t alloc_block_pool_size = impl::alloc_block_pool_size_t<traits_t>::alloc_block_pool_size;
 		static constexpr std::size_t alloc_min_block_size = impl::alloc_min_block_size_t<traits_t>::alloc_min_block_size;
@@ -283,14 +284,18 @@ namespace cuw::mem {
 	struct pool_alloc_traits_t : public traits_t {
 		static constexpr std::size_t alloc_min_pool_power = impl::alloc_min_pool_power_t<traits_t>::alloc_min_pool_power;
 		static constexpr std::size_t alloc_min_pool_size = impl::alloc_min_pool_size_t<traits_t>::alloc_min_pool_size;
-		static constexpr std::size_t alloc_max_pool_power = impl::alloc_max_pool_power_t<traits_t>::alloc_maX_pool_power;
+		static constexpr std::size_t alloc_max_pool_power = impl::alloc_max_pool_power_t<traits_t>::alloc_max_pool_power;
 		static constexpr std::size_t alloc_max_pool_size = impl::alloc_max_pool_size_t<traits_t>::alloc_max_pool_size;
+		static constexpr std::size_t alloc_base_alignment = impl::alloc_base_alignment_t<traits_t>::alloc_base_alignment;
+
 		static constexpr int alloc_pool_cache_lookups = impl::alloc_pool_cache_lookups_t<traits_t>::alloc_pool_cache_lookups;
 		static constexpr int alloc_raw_cache_lookups = impl::alloc_raw_cache_lookups_t<traits_t>::alloc_raw_cache_lookups;
-		static constexpr std::size_t alloc_base_alignment = impl::alloc_base_alignment_t<traits_t>::alloc_base_alignment;
+
 		static constexpr bool use_alloc_cache = impl::use_alloc_cache_t<traits_t>::use_alloc_cache;
+
 		static constexpr pool_chunk_size_t alloc_pool_first_chunk = impl::alloc_pool_specs_t<traits_t>::alloc_pool_first_chunk;
 		static constexpr pool_chunk_size_t alloc_pool_last_chunk = impl::alloc_pool_specs_t<traits_t>::alloc_pool_last_chunk;
+
 		static constexpr std::size_t alloc_raw_base_size = impl::alloc_raw_bins_specs_t<traits_t>::alloc_raw_base_size;
 		static constexpr std::size_t alloc_total_raw_bins = impl::alloc_raw_bins_specs_t<traits_t>::alloc_total_raw_bins;
 

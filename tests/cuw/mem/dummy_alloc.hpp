@@ -70,7 +70,7 @@ namespace {
 			std::cout << "initial alloc range: " << range << std::endl;
 		}
 
-		dummy_allocator_t(std::initializer_list<range_t> _ranges) {
+		dummy_allocator_t(std::initializer_list<range_t> _ranges, std::size_t alignment) {
 			alloc_ranges.insert(_ranges.begin(), _ranges.end());
 			for (auto& range : _ranges) {
 				return_range(range);
@@ -176,7 +176,7 @@ namespace {
 		[[nodiscard]] void* reallocate(void* old_ptr, std::size_t old_size, std::size_t new_size) {
 			std::cout << "reallocating memory " << old_ptr << " of size " << old_size << " to new size " << new_size << std::endl;
 			if (void* new_ptr = allocate(new_size)) {
-				memcpy(new_ptr, old_ptr, std::min(old_size, new_size));
+				std::memcpy(new_ptr, old_ptr, std::min(old_size, new_size));
 				deallocate(old_ptr, old_size);
 				std::cout << "memory successfully reallocated: " << new_ptr << std::endl << std::endl;
 				return new_ptr;
@@ -227,7 +227,7 @@ namespace {
 		[[nodiscard]] void* reallocate_hint(void* hint, void* old_ptr, std::size_t old_size, std::size_t new_size) {
 			std::cout << "reallocating memory " << old_ptr << " of size " << old_size << " to new size" << new_size << " using hint " << hint << std::endl;
 			if (void* new_ptr = allocate_hint(hint, new_size)) {
-				memcpy(new_ptr, old_ptr, std::min(old_size, new_size));
+				std::memcpy(new_ptr, old_ptr, std::min(old_size, new_size));
 				deallocate(old_ptr, old_size);
 				std::cout << "memory successfully reallocated: " << new_ptr << std::endl << std::endl;
 				return new_ptr;

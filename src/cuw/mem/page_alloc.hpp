@@ -94,6 +94,7 @@ namespace cuw::mem {
 		void* data;
 	};
 
+	// TODO : add size field
 	class free_block_descr_entry_t : public block_pool_entry_t {
 	public:
 		using bp_t = block_pool_t;
