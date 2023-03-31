@@ -155,7 +155,6 @@ namespace cuw::mem {
 	template<class basic_alloc_t>
 	using pool_alloc_adapter_t = impl::pool_alloc_adapter_t<basic_alloc_t, basic_alloc_t::use_alloc_cache>;
 
-	// TODO : alignment is adjusted now, maybe it should fail to allocate if alignment is inappropriate?
 	template<class basic_alloc_t>
 	class pool_alloc_t : public pool_alloc_adapter_t<basic_alloc_t> {
 	public:
@@ -179,10 +178,11 @@ namespace cuw::mem {
 		using raw_bins_t = impl::raw_bins_t<raw_bin_t, base_t::alloc_raw_base_size, base_t::alloc_total_raw_bins>;
 
 	public:
-		pool_alloc_t() = default;
-
 		template<class ... args_t>
-		pool_alloc_t(args_t&& ... args) : base_t(std::forward<args_t>(args)...) {}
+		pool_alloc_t(args_t&& ... args) : base_t(std::forward<args_t>(args)...) {
+			min_pool_alignment = std::min(base_t::get_page_size(), pool_chunk_size((std::size_t)base_t::alloc_pool_first_chunk));
+			max_pool_alignment = std::min(base_t::get_page_size(), pool_chunk_size((std::size_t)base_t::alloc_pool_last_chunk));
+		}
 
 		pool_alloc_t(const pool_alloc_t&) = delete;
 		pool_alloc_t(pool_alloc_t&&) = delete;
@@ -214,27 +214,28 @@ namespace cuw::mem {
 		}
 
 	private:
+		// returns non-zero on success, returns 0 on failure
 		template<class int_t>
-		int_t get_min_pool_alignment() {
-			return pool_chunk_size((int_t)base_t::alloc_pool_first_chunk);
-		}
-
-		template<class int_t>
-		int_t get_max_alignment() {
-			return std::min<int_t>(base_t::get_page_size(), pool_chunk_size((int_t)base_t::alloc_pool_last_chunk));
-		}
-
-		template<class int_t>
-		void assert_alignment(int_t value) {
-			assert(is_alignment(value) && get_min_pool_alignment<int_t>() <= value && value <= (int_t)base_t::get_page_size());
-		}
-
-		template<class int_t>
-		int_t adjust_alignment(int_t value) {
-			assert_alignment(value);
+		int_t adjust_raw_alignment(int_t value) {
 			if (value == 0) {
 				value = base_t::alloc_base_alignment;
-			} return std::clamp(value, get_min_pool_alignment<int_t>(), (int_t)base_t::get_page_size());
+			} if (!is_alignment(value)) {
+				return (int_t)0;
+			} if (value <= base_t::get_page_size()) {
+				return value;
+			} return (int_t)0;
+		}
+
+		// returns non-zero on success, returns 0 on failure
+		template<class int_t>
+		int_t adjust_pool_alignment(int_t value) {
+			if (value == (int_t)0) {
+				value = base_t::alloc_base_alignment;
+			} if (!is_alignment(value)) {
+				return (int_t)0;
+			} if (value <= (int_t)max_pool_alignment) {
+				return value;
+			} return (int_t)0;
 		}
 
 	private:
@@ -385,12 +386,19 @@ namespace cuw::mem {
 		[[nodiscard]] void* alloc42(std::size_t size, std::size_t alignment) {
 			assert(size != 0);
 
-			alignment = adjust_alignment(alignment);
+			if (std::size_t pool_alignment = adjust_pool_alignment(alignment)) {
+				std::size_t size_aligned = align_value(size, pool_alignment);
+				if (auto pool = pools.find(size_aligned); pool != pools.end()) {
+					return alloc_pool(*pool);
+				}
+			}
 
-			std::size_t size_aligned = align_value(size, alignment);
-			if (auto pool = pools.find(size_aligned); pool != pools.end()) {
-				return alloc_pool(*pool);
-			} return alloc_raw(size_aligned, alignment);
+			if (std::size_t raw_alignment = adjust_raw_alignment(alignment)) {
+				std::size_t size_aligned = align_value(size, raw_alignment);
+				return alloc_raw(size_aligned, raw_alignment);
+			}
+			
+			return nullptr;
 		}
 
 		void free42(void* ptr) {
@@ -427,12 +435,18 @@ namespace cuw::mem {
 			assert(ptr);
 			assert(size != 0);
 
-			alignment = adjust_alignment(alignment);
+			if (std::size_t pool_alignment = adjust_pool_alignment(alignment)) {
+				std::size_t size_aligned = align_value(size, alignment);
+				if (auto pool = pools.find(size_aligned); pool != pools.end()) {
+					free_pool(*pool, ptr);
+					return;
+				}
+			}
 
-			std::size_t size_aligned = align_value(size, alignment);
-			if (auto pool = pools.find(size_aligned); pool != pools.end()) {
-				free_pool(*pool, ptr);
-			} free_raw(ptr, size_aligned);
+			if (std::size_t raw_alignment = adjust_raw_alignment(alignment)) {
+				std::size_t size_aligned = align_value(size, alignment);
+				free_raw(ptr, size_aligned);
+			}
 		}
 
 		[[nodiscard]] void* realloc42(void* old_ptr, std::size_t new_size) {
@@ -467,71 +481,78 @@ namespace cuw::mem {
 			assert(old_size != 0);
 			assert(new_size != 0);
 
-			alignment = adjust_alignment(alignment);
+			if (std::size_t pool_alignment = adjust_pool_alignment(alignment)) {
+				std::size_t old_size_aligned = align_value(old_size, pool_alignment);
+				std::size_t new_size_aligned = align_value(new_size, pool_alignment);
 
-			std::size_t old_size_aligned = align_value(old_size, alignment);
-			std::size_t new_size_aligned = align_value(new_size, alignment);
-			if (old_size_aligned == new_size_aligned) {
-				return old_ptr;
-			}
-
-			auto old_pool = pools.find(old_size_aligned);
-			auto new_pool = pools.find(new_size_aligned);
-			bool old_in_pool = old_pool != pools.end();
-			bool new_in_pool = new_pool != pools.end(); 
-
-			// pool-pool transfer
-			if (old_in_pool && new_in_pool) {
-				if (old_pool != pools.end() && old_pool == new_pool) {
-					return old_ptr; // same chunk_size
+				if (old_size_aligned == new_size_aligned) {
+					return old_ptr;
 				}
 
-				void* new_ptr = alloc_pool(*new_pool);
-				if (!new_ptr) {
-					return nullptr;
+				auto old_pool = pools.find(old_size_aligned);
+				auto new_pool = pools.find(new_size_aligned);
+				bool old_in_pool = old_pool != pools.end();
+				bool new_in_pool = new_pool != pools.end(); 
+
+				// pool-pool transfer
+				if (old_in_pool && new_in_pool) {
+					if (old_pool != pools.end() && old_pool == new_pool) {
+						return old_ptr; // same chunk_size
+					}
+
+					void* new_ptr = alloc_pool(*new_pool);
+					if (!new_ptr) {
+						return nullptr;
+					}
+
+					std::memcpy(new_ptr, old_ptr, std::min(old_size, new_size));
+					free_pool(*old_pool, old_ptr);
+					return new_ptr;
 				}
 
-				std::memcpy(new_ptr, old_ptr, std::min(old_size, new_size));
-				free_pool(*old_pool, old_ptr);
-				return new_ptr;
-			}
+				// pool-raw transfer
+				if (old_in_pool) {
+					void* new_ptr = alloc_raw(new_size_aligned, pool_alignment);
+					if (!new_ptr) {
+						return nullptr;
+					}
 
-			// pool-raw transfer
-			if (old_in_pool) {
-				void* new_ptr = alloc_raw(new_size_aligned, alignment);
-				if (!new_ptr) {
-					return nullptr;
+					std::memcpy(new_ptr, old_ptr, std::min(old_size, new_size));
+					free_pool(*old_pool, old_ptr);
+					return new_ptr;
 				}
 
-				std::memcpy(new_ptr, old_ptr, std::min(old_size, new_size));
-				free_pool(*old_pool, old_ptr);
-				return new_ptr;
-			}
+				// raw-pool transfer
+				if (new_in_pool) {
+					void* new_ptr = alloc_pool(*new_pool);
+					if (!new_ptr) {
+						return nullptr;
+					}
 
-			// raw-pool transfer
-			if (new_in_pool) {
-				void* new_ptr = alloc_pool(*new_pool);
-				if (!new_ptr) {
-					return nullptr;
+					std::memcpy(new_ptr, old_ptr, std::min(old_size, new_size));
+					free_raw(old_ptr, old_size_aligned);
+					return new_ptr;
 				}
 
-				std::memcpy(new_ptr, old_ptr, std::min(old_size, new_size));
-				free_raw(old_ptr, old_size_aligned);
-				return new_ptr;
+				// raw-raw transfer
+				return realloc_raw(old_ptr, old_size, pool_alignment, new_size);
 			}
 
-			// raw-raw transfer
-			return realloc_raw(old_ptr, old_size, alignment, new_size);
+			if (std::size_t raw_alignment = adjust_raw_alignment(alignment)) {
+				return realloc_raw(old_ptr, old_size, raw_alignment, new_size);
+			}
+
+			return nullptr;
 		}
 
-		// zero_alloc logically has any alignment but practically it has minimal possible alignment
-		// it means that you can realloc zero allocation to any alignment
+		// zero_alloc logically has any alignment(you can realloc zero allocation to any alignment)
+		// but practically it has minimal possible alignment
 		[[nodiscard]] void* zero_alloc() {
-			return alloc42(1, get_min_pool_alignment<std::size_t>());
+			return alloc42(1, min_pool_alignment);
 		}
 
 		void free_zero(void* ptr) {
-			free42(ptr, 1, get_min_pool_alignment<std::size_t>());
+			free42(ptr, 1, min_pool_alignment);
 		}
 
 	public: // standart API
@@ -594,5 +615,7 @@ namespace cuw::mem {
 		ad_addr_cache_t addr_cache{}; // common addr cache for all allocations
 		pools_t pools{};
 		raw_bins_t raw_bins{};
+		std::size_t min_pool_alignment{};
+		std::size_t max_pool_alignment{};
 	};
 }
