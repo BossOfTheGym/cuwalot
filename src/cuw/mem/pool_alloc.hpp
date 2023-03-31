@@ -555,7 +555,7 @@ namespace cuw::mem {
 			free42(ptr, 1, min_pool_alignment);
 		}
 
-	public: // standart API
+	public: // standart API, do not use extension API to free allocations
 		[[nodiscard]] void* malloc(std::size_t size) {
 			if (size == 0){
 				return zero_alloc();
@@ -608,7 +608,7 @@ namespace cuw::mem {
 			} if (size == 0) {
 				free_zero(ptr);
 			} return free42(ptr, size, alignment);
-		}
+		}	
 
 	private:
 		ad_entry_t ad_entry{};
