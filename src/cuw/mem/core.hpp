@@ -29,6 +29,7 @@ namespace cuw::mem {
 
 	inline constexpr std::size_t dummy_alignment = 1;
 
+	inline constexpr attrs_t min_pool_chunks = 1;
 	inline constexpr attrs_t max_pool_chunks = ((attrs_t)1 << 14) - 1;
 	inline constexpr attrs_t max_alloc_bits = 48;
 	inline constexpr attrs_t max_alloc_size = ((attrs_t)1 << max_alloc_bits) - 1;
@@ -80,14 +81,14 @@ namespace cuw::mem {
 
 	inline constexpr attrs_t chunk_size_empty = ~0;
 
-	// all chunk sizes are power of two, each chunk type can have its own capacity(count of pages allocated) 
-	// every pool can store data with data alignment requirement up to the size of a chunk as all pools will be
-	// stored at page start (every pool is page-aligned) or at least chunk aligned in case of fragmented free block
-	// as much as chunk_size / 2 memory space can be wasted
+	// each pool stores chunks aligned to the min(chunk_size, some_max_alignment)
+	// max_alignment is usually a page_size 
+	// Bytes1 can't be used as a valid chunk_size value but rather as an alignment value by Raw allocations 
 	enum class pool_chunk_size_t : attrs_t {
 		Empty = chunk_size_empty,
-		Min = 1,
-		Bytes2 = Min,
+		Min = 0,
+		Bytes1 = 0,
+		Bytes2,
 		Bytes4,
 		Bytes8,
 		Bytes16,
@@ -130,9 +131,7 @@ namespace cuw::mem {
 	template<class int_t>
 	constexpr int_t value_to_pool_chunk(int_t value) {
 		assert(std::has_single_bit(value));
-		value = std::countr_zero(value); 
-		assert(value >= (int_t)pool_chunk_size_t::Min && value <= (int_t)pool_chunk_size_t::Max);
-		return value;
+		return std::countr_zero(value);
 	}
 
 
@@ -160,6 +159,11 @@ namespace cuw::mem {
 	constexpr int_t align_value(int_t value, int_t alignment) {
 		assert(is_alignment(alignment)); // must be power of two
 		return (value + alignment - 1) & ~(alignment - 1);
+	}
+
+	template<class ptr_t>
+	constexpr ptr_t* align_value(ptr_t* ptr, std::uintptr_t alignment) {
+		return (ptr_t*)align_value((std::uintptr_t)ptr, alignment);
 	}
 
 	template <typename enum_t>

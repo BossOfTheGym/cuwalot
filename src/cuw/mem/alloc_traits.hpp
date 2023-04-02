@@ -68,7 +68,7 @@ namespace cuw::mem {
 		struct alloc_min_pool_power_t<alloc_traits_t,
 			std::void_t<enable_option_t<attrs_t, decltype(alloc_traits_t::alloc_min_pool_power)>>> {
 			static constexpr attrs_t alloc_min_pool_power = alloc_traits_t::alloc_min_pool_power;
-			static_assert(alloc_min_pool_power != 0);
+			static_assert(alloc_min_pool_power > 0);
 		};
 
 		template<class alloc_traits_t>
@@ -81,20 +81,21 @@ namespace cuw::mem {
 			static_assert(alloc_min_pool_size >= _alloc_page_size);
 		};
 
+		template<class alloc_traits_t>
+		struct alloc_min_pool_specs_t : alloc_min_pool_power_t<alloc_traits_t>, alloc_min_pool_size_t<alloc_traits_t> {}; 
+
 		template<class alloc_traits_t, class = void>
 		struct alloc_max_pool_power_t {
 			static constexpr attrs_t alloc_max_pool_power = default_max_pool_power;
-			static constexpr attrs_t alloc_max_pool_size = (attrs_t)1 << alloc_max_pool_power;
 		};
 
 		template<class alloc_traits_t>
 		struct alloc_max_pool_power_t<alloc_traits_t,
 			std::void_t<enable_option_t<attrs_t, decltype(alloc_traits_t::alloc_max_pool_power)>>> {
 		private:
-			static constexpr attrs_t _alloc_min_pool_power = alloc_min_pool_power_t<alloc_traits_t>::alloc_min_pool_power; 
+			static constexpr attrs_t _alloc_min_pool_power = alloc_min_pool_power_t<alloc_traits_t>::alloc_min_pool_power;
 		public:
 			static constexpr attrs_t alloc_max_pool_power = alloc_traits_t::alloc_max_pool_power;
-			static constexpr attrs_t alloc_max_pool_size = (attrs_t)1 << alloc_max_pool_power;
 			static_assert(_alloc_min_pool_power <= alloc_max_pool_power);
 		};
 
@@ -105,6 +106,9 @@ namespace cuw::mem {
 		public:
 			static constexpr attrs_t alloc_max_pool_size = (attrs_t)1 << _alloc_max_pool_power;
 		};
+
+		template<class alloc_traits_t>
+		struct alloc_max_pool_specs_t : alloc_max_pool_power_t<alloc_traits_t>, alloc_max_pool_size_t<alloc_traits_t> {};
 
 		template<class alloc_traits_t, class = void>
 		struct alloc_pool_cache_lookups_t {
@@ -282,10 +286,10 @@ namespace cuw::mem {
 
 	template<class traits_t>
 	struct pool_alloc_traits_t : public traits_t {
-		static constexpr std::size_t alloc_min_pool_power = impl::alloc_min_pool_power_t<traits_t>::alloc_min_pool_power;
-		static constexpr std::size_t alloc_min_pool_size = impl::alloc_min_pool_size_t<traits_t>::alloc_min_pool_size;
-		static constexpr std::size_t alloc_max_pool_power = impl::alloc_max_pool_power_t<traits_t>::alloc_max_pool_power;
-		static constexpr std::size_t alloc_max_pool_size = impl::alloc_max_pool_size_t<traits_t>::alloc_max_pool_size;
+		static constexpr std::size_t alloc_min_pool_power = impl::alloc_min_pool_specs_t<traits_t>::alloc_min_pool_power;
+		static constexpr std::size_t alloc_min_pool_size = impl::alloc_min_pool_specs_t<traits_t>::alloc_min_pool_size;
+		static constexpr std::size_t alloc_max_pool_power = impl::alloc_max_pool_specs_t<traits_t>::alloc_max_pool_power;
+		static constexpr std::size_t alloc_max_pool_size = impl::alloc_max_pool_specs_t<traits_t>::alloc_max_pool_size;
 		static constexpr std::size_t alloc_base_alignment = impl::alloc_base_alignment_t<traits_t>::alloc_base_alignment;
 
 		static constexpr int alloc_pool_cache_lookups = impl::alloc_pool_cache_lookups_t<traits_t>::alloc_pool_cache_lookups;

@@ -129,50 +129,6 @@ namespace {
 		return 0;
 	}
 
-	template<class fbd_t>
-	struct fbd_info_t {
-		friend std::ostream& operator << (std::ostream& os, const fbd_info_t& info) {
-			return os << " fbd: " << (void*)info.fbd
-				<< " off: " << info.fbd->offset
-				<< " size: " << info.fbd->size
-				<< " data: " << info.fbd->data;
-		}
-
-		fbd_t* fbd{};
-	};
-
-	template<class page_alloc_t>
-	struct addr_index_info_t {
-		friend std::ostream& operator << (std::ostream& os, const addr_index_info_t& nodes) {
-			for (auto index : nodes.alloc.get_addr_index()) {
-				os << fbd_info_t{mem::free_block_descr_t::addr_index_to_descr(index)} << std::endl;
-			} return os;
-		}
-
-		page_alloc_t& alloc;
-	};
-
-	template<class page_alloc_t>
-	struct size_index_info_t {
-		friend std::ostream& operator << (std::ostream& os, const size_index_info_t& nodes) {
-			for (auto index : nodes.alloc.get_size_index()) {
-				os << fbd_info_t{mem::free_block_descr_t::size_index_to_descr(index)} << std::endl;
-			} return os;
-		}
-
-		page_alloc_t& alloc;
-	};
-
-	template<class page_alloc_t>
-	struct page_alloc_info_t {
-		friend std::ostream& operator << (std::ostream& os, const page_alloc_info_t& info) {
-			return os << "addr index:" << std::endl << addr_index_info_t{info.alloc} << std::endl
-				<< "size index:" << std::endl << size_index_info_t{info.alloc} << std::endl;
-		}
-
-		page_alloc_t& alloc;
-	};
-
 	int test_adopt() {
 		std::cout << "testing adoption" << std::endl;
 
@@ -330,26 +286,6 @@ namespace {
 		return 0;
 	}
 
-	class int_gen_t {
-	public:
-		int_gen_t(int seed) : rgen(seed) {}
-
-		// generate number from [a, b)
-		int gen(int a, int b) {
-			int value = rgen();
-			return value % (b - a) + a;
-		}
-
-		// generate number from [0, a)
-		int gen(int a) {
-			int value = rgen();
-			return value % a;
-		}
-
-	private:
-		std::minstd_rand0 rgen;
-	};
-
 	struct allocation_t {
 		void* ptr{};
 		std::size_t size{};
@@ -357,17 +293,6 @@ namespace {
 
 	std::ostream& operator << (std::ostream& os, const allocation_t& allocation) {
 		return os << print_range_t{allocation.ptr, allocation.size};
-	}
-
-	void memset_deadbeef(void* ptr, std::size_t size) {
-		const char* deadbeef = "\xde\xad\xbe\xef";
-		while (size >= 4) {
-			std::memcpy(ptr, deadbeef, 4);
-			ptr = (char*)ptr + 4;
-			size -= 4;
-		} if (size > 0) {
-			std::memcpy(ptr, deadbeef, size);
-		}
 	}
 
 	int test_random_stuff() {

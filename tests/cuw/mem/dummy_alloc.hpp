@@ -45,6 +45,12 @@ namespace {
 				&& (std::uintptr_t)checked < (std::uintptr_t)get_end();
 		}
 
+		bool overlaps(const range_t& another) const {
+			auto a0 = (std::uintptr_t)get_start(), b0 = (std::uintptr_t)get_start();
+			auto a1 = (std::uintptr_t)another.get_start(), b1 = (std::uintptr_t)another.get_start();
+			return !(b0 <= a1 || b1 <= a0); // a1 < b0 && a0 < b1
+		}
+
 		void* base_ptr{};
 		void* ptr{};
 		std::size_t size{};
@@ -63,16 +69,17 @@ namespace {
 		using tag_t = mem::sysmem_alloc_tag_t;
 		using traits_t = __traits_t;
 
-		dummy_allocator_t(std::size_t size, std::size_t alignment) {
+		dummy_allocator_t(std::size_t size, std::size_t alignment) : page_size{alignment} {
 			auto range = range_t::create(size, alignment);
 			alloc_ranges.insert(range);
 			ranges.insert(range);
 			std::cout << "initial alloc range: " << range << std::endl;
 		}
 
-		dummy_allocator_t(std::initializer_list<range_t> _ranges, std::size_t alignment) {
+		dummy_allocator_t(std::initializer_list<range_t> _ranges, std::size_t alignment) : page_size{alignment} {
 			alloc_ranges.insert(_ranges.begin(), _ranges.end());
 			for (auto& range : _ranges) {
+				assert(mem::is_aligned(range.ptr, alignment));
 				return_range(range);
 			} for (auto& range : alloc_ranges) {
 				std::cout << "initial alloc range: " << range << std::endl;
@@ -111,7 +118,11 @@ namespace {
 
 			auto merge_prev_curr = [&] (auto prev, auto curr) {
 				assert(curr != ranges.end());
-				if (prev != ranges.end() && prev->get_end() == curr->get_start()) {
+
+				if (prev != ranges.end() && prev->overlaps(*curr)) {
+					std::cerr << "overlap detected" << std::endl;
+					std::abort();
+				} if (prev != ranges.end() && prev->get_end() == curr->get_start()) {
 					std::cout << "merging two ranges: " << *prev << " " << *curr << std::endl;
 					range_t new_range{nullptr, prev->ptr, prev->size + curr->size};
 					ranges.erase(prev);
@@ -125,6 +136,12 @@ namespace {
 
 			auto merge_curr_next = [&] (auto curr, auto next) {
 				assert(curr != ranges.end());
+
+				if (next != ranges.end() && curr->overlaps(*next)) {
+					std::cerr << "overlap detected" << std::endl;
+					std::abort();
+				}
+
 				if (next != ranges.end() && curr->get_end() == next->get_start()) {
 					std::cout << "merging two ranges: " << *curr << " " << *next << std::endl;
 					range_t new_range{nullptr, curr->ptr, curr->size + next->size};
@@ -146,6 +163,8 @@ namespace {
 
 	public:
 		[[nodiscard]] void* allocate(std::size_t size) {
+			size = mem::align_value(size, page_size);
+
 			std::cout << "making allocation of size " << size << std::endl;
 			auto i = ranges.begin(), e = ranges.end();
 			while (i != e) {
@@ -168,12 +187,17 @@ namespace {
 		}
 
 		void deallocate(void* ptr, std::size_t size) {
+			size = mem::align_value(size, page_size);
+
 			range_t range{ptr, ptr, size};
 			std::cout << "deallocating range: " << range << std::endl;
 			return_range(range);
 		}
 
 		[[nodiscard]] void* reallocate(void* old_ptr, std::size_t old_size, std::size_t new_size) {
+			old_size = mem::align_value(old_size, page_size);
+			new_size = mem::align_value(new_size, page_size);
+
 			std::cout << "reallocating memory " << old_ptr << " of size " << old_size << " to new size " << new_size << std::endl;
 			if (void* new_ptr = allocate(new_size)) {
 				std::memcpy(new_ptr, old_ptr, std::min(old_size, new_size));
@@ -187,6 +211,9 @@ namespace {
 
 	public:
 		[[nodiscard]] void* allocate_hint(void* hint, std::size_t size) {
+			hint = mem::align_value(hint, page_size);
+			size = mem::align_value(size, page_size);
+
 			std::cout << "making allocation of size " << size << " using hint " << hint << std::endl;
 
 			auto it = ([&] () {
@@ -225,6 +252,8 @@ namespace {
 		}
 
 		[[nodiscard]] void* reallocate_hint(void* hint, void* old_ptr, std::size_t old_size, std::size_t new_size) {
+			
+
 			std::cout << "reallocating memory " << old_ptr << " of size " << old_size << " to new size" << new_size << " using hint " << hint << std::endl;
 			if (void* new_ptr = allocate_hint(hint, new_size)) {
 				std::memcpy(new_ptr, old_ptr, std::min(old_size, new_size));
@@ -261,9 +290,14 @@ namespace {
 			return ranges;
 		}
 
+		std::size_t get_page_size() const {
+			return page_size;
+		}
+
 	private:
 		range_set_t alloc_ranges{};
 		range_set_t ranges;
+		std::size_t page_size{};
 	};
 
 	struct alloc_request_t {
@@ -340,6 +374,10 @@ namespace {
 
 		const range_set_t& get_ranges() const {
 			return alloc.get_ranges();
+		}
+
+		std::size_t get_page_size() const {
+			return alloc.get_page_size();
 		}
 
 	private:
@@ -420,6 +458,10 @@ namespace {
 
 		const range_set_t& get_ranges() const {
 			return alloc.get_ranges();
+		}
+
+		std::size_t get_page_size() const {
+			return alloc.get_page_size();
 		}
 
 	private:

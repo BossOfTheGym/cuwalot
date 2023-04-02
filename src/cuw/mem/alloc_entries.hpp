@@ -14,7 +14,8 @@ namespace cuw::mem {
 		using ad_t = alloc_descr_t;
 		using ad_addr_cache_t = alloc_descr_addr_cache_t;
 
-		basic_pool_entry_t(attrs_t chunk_enum, attrs_t type) : base_t(chunk_enum, type) {}
+		basic_pool_entry_t(attrs_t chunk_enum, attrs_t type, attrs_t _alignment)
+			: base_t(chunk_enum, type), alignment{_alignment} {}
 
 	public:
 		attrs_t get_chunk_size() const {
@@ -26,7 +27,7 @@ namespace cuw::mem {
 		}
 
 		// size, capacity
-		std::tuple<attrs_t, attrs_t> get_next_pool_params(attrs_t min_pools, attrs_t max_pools) const {
+		next_pool_params_t get_next_pool_params(attrs_t min_pools, attrs_t max_pools) const {
 			return base_t::get_next_pool_params(min_pools, max_pools);
 		}
 
@@ -36,11 +37,11 @@ namespace cuw::mem {
 			} return addr_cache.find(addr);
 		}
 
-		// NOTE: data must be aligned beforehand
 		ad_t* create(ad_addr_cache_t& addr_cache, void* block, attrs_t offset, attrs_t size, attrs_t capacity, void* data) {
 			assert(block);
 			assert(data);
-			
+			assert(is_aligned(data, alignment));
+
 			ad_t* descr = new (block) ad_t {
 				.offset = offset, .size = size,
 				.type = base_t::get_type(), .chunk_size = base_t::get_chunk_size_enum(),
@@ -59,7 +60,7 @@ namespace cuw::mem {
 				return nullptr;
 			}
 
-			wrapper_t pool(descr, base_t::get_chunk_size_enum());
+			wrapper_t pool(descr, base_t::get_chunk_size_enum(), alignment);
 			assert(!pool.full());
 
 			void* chunk = pool.acquire_chunk();
@@ -77,7 +78,7 @@ namespace cuw::mem {
 
 		template<class wrapper_t>
 		[[nodiscard]] ad_t* release(void* ptr, ad_t* descr) {
-			wrapper_t pool(descr, base_t::get_chunk_size_enum());
+			wrapper_t pool(descr, base_t::get_chunk_size_enum(), alignment);
 
 			assert(!pool.empty());
 			
@@ -106,6 +107,9 @@ namespace cuw::mem {
 		void reset() {
 			base_t::reset();
 		}
+
+	private:
+		attrs_t alignment{};
 	};
 
 	template<auto check_policy = pool_checks_policy_t::Default>
@@ -116,8 +120,8 @@ namespace cuw::mem {
 		using ad_addr_cache_t = alloc_descr_addr_cache_t;
 		using wrapper_t = basic_pool_wrapper_t;
 
-		pool_entry_t(pool_chunk_size_t chunk_enum = pool_chunk_size_t::Empty)
-			: base_t{(attrs_t)chunk_enum, (attrs_t)block_type_t::Pool} {}
+		pool_entry_t(pool_chunk_size_t chunk_enum = pool_chunk_size_t::Empty, attrs_t alignment = 0)
+			: base_t{(attrs_t)chunk_enum, (attrs_t)block_type_t::Pool, alignment} {}
 
 		[[nodiscard]] void* acquire() {
 			return base_t::template acquire<wrapper_t>();
@@ -156,8 +160,11 @@ namespace cuw::mem {
 				void* block, attrs_t offset, attrs_t size, attrs_t alignment, void* data) {
 			assert(block);
 			assert(data);
+			assert(is_aligned(data, alignment));
+
 			ad_t* descr = new (block) ad_t {
-				.offset = offset, .size = align_value(size, alignment), .chunk_size = value_to_pool_chunk(alignment), .data = data
+				.offset = offset, .size = size, .type = (attrs_t)block_type_t::Raw,
+				.chunk_size = value_to_pool_chunk(alignment), .data = data
 			};
 			base_t::insert(descr);
 			addr_cache.insert(descr);

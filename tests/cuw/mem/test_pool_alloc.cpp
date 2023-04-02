@@ -28,74 +28,42 @@ namespace {
 
 	using pool_alloc_traits_t = mem::pool_alloc_traits_t<mem::page_alloc_traits_t<basic_alloc_traits_t>>;
 	using page_alloc_t = mem::page_alloc_t<dummy_allocator_t<pool_alloc_traits_t>>;
+	//using page_alloc_t = dummy_allocator_t<pool_alloc_traits_t>;
 	using pool_alloc_t = mem::pool_alloc_t<page_alloc_t>;
 
-	// some ideas on testing:
-	// - we test malloc/realloc
-	// - we must definitely test zero allocation
-	// - some variants
-	//  - malloc(0)
-	//  - malloc(0, <any alignment>)
-	//  - malloc(<non_zero>)
-	//  - malloc(<non_zero>, <any_alignment>)
-	//
-	//  - realloc(nullptr, 0)
-	//  - realloc(<zero_alloc>, <any_size>)
-	//  - realloc(<non_zero_alloc>, <any_size>)
-	//  - realloc(nullptr, <any_size>, <new any_size>, <any_alignment>, 0) -> malloc(<any_size>, <any_alignment>)
-	//  - realloc(<zero_alloc>, 0, 0, <any_alignment>)
-	//  - realloc(<zero_alloc>, 0, <size > 0>, <any_alignment>)
-	//  - realloc(<non_zero_alloc>, <old_size>, <new_size>, <alignment>)
-	//
-	//  - free(nullptr)
-	//
-	//  - test pool growth
+	inline constexpr std::size_t min_pool_chunk_size = mem::pool_chunk_size((std::size_t)pool_alloc_t::alloc_pool_first_chunk);
+	inline constexpr std::size_t max_pool_chunk_size = mem::pool_chunk_size((std::size_t)pool_alloc_t::alloc_pool_last_chunk);
+	inline constexpr std::size_t max_alignment = std::min(max_pool_chunk_size, pool_alloc_t::alloc_page_size);
+	inline constexpr std::size_t max_alignment_power = std::countr_zero(max_alignment);
+
 	int test_pool_alloc() {
+		std::cout << "testing pool_alloc..." << std::endl;
+
 		constexpr std::size_t page_size = pool_alloc_t::alloc_page_size;
 		constexpr std::size_t basic_alloc_size = page_size << 10;
-		constexpr std::size_t min_pool_chunk_size = mem::pool_chunk_size((std::size_t)pool_alloc_t::alloc_pool_first_chunk);
-		constexpr std::size_t max_pool_chunk_size = mem::pool_chunk_size((std::size_t)pool_alloc_t::alloc_pool_last_chunk);
-		constexpr std::size_t max_pool_alignment = std::min(max_pool_chunk_size, pool_alloc_t::alloc_page_size);
 
 		pool_alloc_t alloc(basic_alloc_size, page_size);
 
 		void* ptr{};
-		
-		// malloc(0)
-		ptr = alloc.malloc(0);
-		alloc.free(ptr);
 
-		// malloc(0, <any alignment>)
-		for (int i = 0; i <= 4; i++) {
-			ptr = alloc.malloc(0, i);
+		// malloc(<any_size>)
+		for (int size = 0; size <= 2 * max_pool_chunk_size; size = 2 * size + 1) {
+			ptr = alloc.malloc(size);
+			memset_deadbeef(ptr, size);
 			alloc.free(ptr);
 		}
 
-		// malloc(0, <any alignment>) -> free_ext()
-		for (int i = 0; i <= 4; i++) {
-			ptr = alloc.malloc(0, i);
-			alloc.free(ptr, 0, i);
-		}
-
-		// malloc(<non_zero>)
-		for (int i = 1; i <= max_pool_chunk_size + 1; i++) {
-			ptr = alloc.malloc(i);
-			alloc.free(ptr);
-		}
-
-		// malloc(<non_zero>, <any_alignment>)
-		for (int i = 1; i <= max_pool_chunk_size + 1; i++) {
-			for (int j = 1; j <= 2 * max_pool_alignment; j *= 2) {
-				ptr = alloc.malloc(i, j);
+		// malloc(<any_size>, <any_alignment>)
+		for (int size = 0; size <= 2 * max_pool_chunk_size; size = 2 * size + 1) {
+			for (int alignment = 1; alignment <= max_alignment; alignment *= 2) {
+				// standart API
+				ptr = alloc.malloc(size, alignment);
+				memset_deadbeef(ptr, size);
 				alloc.free(ptr);
-			}
-		}
-
-		// malloc(<non_zero>, <any_alignment>)
-		for (int i = 1; i <= max_pool_chunk_size + 1; i++) {
-			for (int j = 1; j <= 2 * max_pool_alignment; j *= 2) {
-				ptr = alloc.malloc(i, j);
-				alloc.free(ptr, i, j);
+				// extension API
+				ptr = alloc.malloc(size, alignment);
+				memset_deadbeef(ptr, size);
+				alloc.free(ptr, size, alignment);
 			}
 		}
 
@@ -103,68 +71,245 @@ namespace {
 		ptr = alloc.realloc(nullptr, 0);
 		alloc.free(ptr);
 
-		// realloc(<zero_alloc>, <any_size>)
-		for (int i = 0; i <= max_pool_chunk_size + 1; i++) {
-			ptr = alloc.malloc(0);
-			ptr = alloc.realloc(ptr, i);
-			alloc.free(ptr);
-		}
-
-		// realloc(<non_zero_alloc>, <any_size>) (pool-pool,raw scenario)
-		for (int i = 1; i <= max_pool_chunk_size + 1; i++) {
-			ptr = alloc.malloc(42);
-			ptr = alloc.realloc(ptr, i);
-			alloc.free(ptr);
-		}
-
-		// realloc(<non_zero_alloc>, <any_size>) (raw-pool,raw scenario)
-		for (int i = 1; i <= 2 * max_pool_chunk_size; i++) {
-			ptr = alloc.malloc(2 * max_pool_chunk_size);
-			ptr = alloc.realloc(ptr, i);
-			alloc.free(ptr);
-		}
-
-		// realloc(nullptr, <any_size>, <any_size>, <any_alignment>, 0) -> malloc(<any_size>, <any_alignment>)
-		for (int i = 0; i <= max_pool_chunk_size + 1; i++) {
-			for (int j = 1; j <= 2 * max_pool_alignment; j *= 2) {
-				ptr = alloc.realloc(nullptr, 42, i, j);
-				alloc.free(ptr, i, j);
-			}
-		}
-
-		// realloc(<zero_alloc>, 0, 0, <any_alignment>)
-		for (int i = 1; i <= 2 * max_pool_alignment; i *= 2) {
-			ptr = alloc.malloc(0);
-			ptr = alloc.realloc(ptr, 0, 0, i);
-			alloc.free(ptr, 0, i);
-		}
-
-		// realloc(<zero_alloc>, 0, <size > 0>, <any_alignment>)		
-		for (int i = 1; i <= 2 * max_pool_chunk_size; i++) {
-			for (int j = 1; j <= 2 * max_pool_alignment; j *= 2) {
-				ptr = alloc.malloc(0);
-				ptr = alloc.realloc(ptr, 0, i, j);
-				alloc.free(ptr, i, j);
-			}
-		}
-
-		// realloc(<non_zero_alloc>, <old_size>, <new_size>, <alignment>)
-		for (int i = 1; i <= 2 * max_pool_chunk_size; i++) {
-			for (int j = 1; j <= max_pool_alignment; j *= 2) {
-				ptr = alloc.malloc(42, j);
-				ptr = alloc.realloc(ptr, 42, i, j);
+		// realloc(<any_alloc>, <any_size>)
+		for (int old_size = 0; old_size <= 2 * max_pool_chunk_size; old_size = 2 * old_size + 1) {
+			for (int new_size = 0; new_size <= 2 * max_pool_chunk_size; new_size = 2 * new_size + 1) {
+				ptr = alloc.malloc(old_size);
+				memset_deadbeef(ptr, old_size);
+				ptr = alloc.realloc(ptr, new_size);
+				memset_deadbeef(ptr, new_size);
 				alloc.free(ptr);
+			}
+		}
+		
+		// realloc(nullptr, <any_size>, <any_size>, <any_alignment>, 0) -> malloc(<any_size>, <any_alignment>)
+		for (int old_size = 0; old_size <= 2 * max_pool_chunk_size; old_size = 2 * old_size + 1) {
+			for (int new_size = 0; new_size <= 2 * max_pool_chunk_size; new_size = 2 * new_size + 1) {
+				for (int alignment = 1; alignment <= max_alignment; alignment *= 2) {
+					ptr = alloc.realloc(nullptr, old_size, alignment, new_size);
+					memset_deadbeef(ptr, new_size);
+					alloc.free(ptr, new_size, alignment);
+				}
+			}
+		}
+
+		// realloc(<any_alloc>, <any_old_size>, <any_new_size>, <any_alignment>)		
+		for (int old_size = 0; old_size <= 2 * max_pool_chunk_size; old_size = 2 * old_size + 1) {
+			for (int new_size = 0; new_size <= 2 * max_pool_chunk_size; new_size = 2 * new_size + 1) {
+				for (int alignment = 1; alignment <= max_alignment; alignment *= 2) {
+					ptr = alloc.malloc(old_size, alignment);
+					memset_deadbeef(ptr, old_size);
+					ptr = alloc.realloc(ptr, old_size, alignment, new_size);
+					memset_deadbeef(ptr, new_size);
+					alloc.free(ptr, new_size, alignment);
+				}
+			}
+		}
+
+		// realloc(<any_alloc>, <any_old_size>, <any_new_size>, <any_alignment>), free using standart API
+		for (int old_size = 0; old_size <= 2 * max_pool_chunk_size; old_size = 2 * old_size + 1) {
+			for (int new_size = 0; new_size <= 2 * max_pool_chunk_size; new_size = 2 * new_size + 1) {
+				for (int alignment = 1; alignment <= max_alignment; alignment *= 2) {
+					ptr = alloc.malloc(old_size, alignment);
+					memset_deadbeef(ptr, old_size);
+					ptr = alloc.realloc(ptr, old_size, alignment, new_size);
+					memset_deadbeef(ptr, new_size);
+					alloc.free(ptr);
+				}
 			}
 		}
 
 		// free(nullptr)
 		alloc.free(nullptr);
 
+		std::cout << "testing finished" << std::endl;
 		return 0;
 	}
 
+	int test_pool_growth_impl(pool_alloc_t& alloc, std::size_t size, std::size_t alignment) {
+		std::cout << "testing pool growth for size " << size << "..." << std::endl;
+
+		// size must be pow of 2
+		if (!mem::is_alignment(size) || !mem::is_alignment(alignment)) {
+			std::cerr << "size of alignment is not power of 2" << std::endl;
+			std::abort();
+		}
+
+		auto geom_sum2 = [] (std::size_t a, std::size_t b) {
+			assert(b >= a);
+			std::size_t m = ~(std::size_t)0;
+			return ~(m << (b - a + 1)) << a;
+		};
+
+		std::size_t size_aligned = mem::align_value(size, alignment);
+		std::size_t count = geom_sum2(pool_alloc_t::alloc_min_pool_power, pool_alloc_t::alloc_max_pool_power) / size_aligned;
+		std::vector<void*> allocations(count);
+
+		std::vector<char> deadbeef(size);
+		memset_deadbeef(deadbeef.data(), size);
+
+		auto allocate = [&] (int start, int end, int step) {
+			for (int i = start; i < end; i += step) {
+				allocations[i] = alloc.malloc(size, alignment);
+				memset_deadbeef(allocations[i], size);
+			}	
+		};
+
+		auto deallocate = [&] (int start, int end, int step) {
+			for (int i = start; i < end; i += step) {
+				if (std::memcmp(allocations[i], deadbeef.data(), size) != 0) {
+					std::cerr << "invalid check value" << std::endl;
+					std::abort();
+				} alloc.free(allocations[i], size, alignment);
+			}
+		};
+
+		std::cout << "allocating all..." << std::endl;
+		allocate(0, count, 1);
+		std::cout << "deallocating all..." << std::endl;
+		deallocate(0, count, 1);
+
+		std::cout << "allocating all..." << std::endl;
+		allocate(0, count, 1);
+		std::cout << "deallocating even.." << std::endl;
+		deallocate(0, count, 2);
+		std::cout << "deallocating odd..." << std::endl;
+		deallocate(1, count, 2);
+
+		std::cout << "allocating even..." << std::endl;
+		allocate(0, count, 2);
+		std::cout << "allocating odd..." << std::endl;
+		allocate(1, count, 2);
+		std::cout << "deallocating first half..." << std::endl;
+		deallocate(0, count / 2, 1);
+		std::cout << "deallocating second half..." << std::endl;
+		deallocate(count / 2, count, 1);
+
+		std::cout << "allocating all..." << std::endl;
+		allocate(0, count, 1);
+		std::cout << "deallocating all..." << std::endl;
+		deallocate(0, count, 1);
+
+		std::cout << "testing finished" << std::endl;
+		return 0;
+	}
+
+	int test_pool_growth() {
+		std::cout << "testing pool growth..." << std::endl;
+
+		constexpr std::size_t page_size = pool_alloc_t::alloc_page_size;
+		constexpr std::size_t basic_alloc_size = page_size << 10;
+
+		pool_alloc_t alloc(basic_alloc_size, page_size);
+		for (int size = 1; size <= max_pool_chunk_size; size *= 2) {
+			for (int alignment = 1; alignment <= max_alignment; alignment *= 2) {
+				test_pool_growth_impl(alloc, size, alignment);
+				std::cout << std::endl;
+			}
+		}
+		
+		std::cout << "testing finished" << std::endl;
+
+		return 0;
+	}
+
+	struct allocation_t {
+		void* ptr{};
+		std::size_t size{};
+		std::size_t alignment{};
+	};
+
+	std::ostream& operator << (std::ostream& os, const allocation_t& alloc) {
+		return os << "[" << pretty(alloc.ptr) << ":" << alloc.size << ":" << alloc.alignment << "]";
+	}
+
 	int test_pool_alloc_random() {
-		// TODO
+		std::cout << "testing by random allocations..." << std::endl;
+
+		constexpr std::size_t page_size = pool_alloc_t::alloc_page_size;
+		constexpr std::size_t basic_alloc_size = page_size << 12;
+		constexpr std::size_t cmd_count = 100;
+		constexpr std::size_t max_req_alloc_size = 1 << 10;
+		constexpr std::size_t max_req_alignment = max_alignment_power;
+
+		int_gen_t gen(42);
+		pool_alloc_t alloc(basic_alloc_size, page_size);
+		std::vector<allocation_t> allocations;
+
+		auto print_status = [&] () {
+			std::cout << "- addr_index" << std::endl << addr_index_info_t{alloc};
+			std::cout << "- size_index" << std::endl << size_index_info_t{alloc};
+			std::cout << "- alloc ranges" << std::endl << ranges_info_t{alloc};
+		};
+
+		auto allocate = [&] () {
+			std::size_t size = gen.gen(max_req_alloc_size + 1);
+			std::size_t alignment = 1 << gen.gen(max_req_alignment + 1);
+			std::cout << "allocating " << size << " bytes aligned by " << alignment << "..." << std::endl;
+			if (void* ptr = alloc.malloc(size, alignment)) {
+				allocations.push_back({ptr, size, alignment});
+				std::cout << "successully allocated memory " << allocations.back() << std::endl;
+			} else {
+				std::cout << "failed to allocate memory" << std::endl;
+			} print_status();
+		};
+
+		auto deallocate = [&] () {
+			if (!allocations.empty()) {
+				int index = gen.gen(allocations.size());
+				auto& allocation = allocations[index];
+				std::cout << "deallocating " << allocation << std::endl;
+				alloc.free(allocation.ptr, allocation.size, allocation.alignment);
+				allocations[index] = allocations.back();
+				allocations.pop_back();
+				std::cout << "successfully deallocated memory" << std::endl;
+				print_status();
+			} else {
+				std::cout << "no allocations" << std::endl;
+			}
+		};
+
+		auto reallocate = [&] () {
+			if (!allocations.empty()) {
+				int index = gen.gen(allocations.size());
+				std::size_t new_size = gen.gen(max_req_alloc_size + 1);
+				auto& allocation = allocations[index];
+				std::cout << "reallocating memory " << allocation << " to size " << new_size << std::endl;
+				if (void* ptr = alloc.realloc(allocation.ptr, allocation.size, allocation.alignment, new_size)) {
+					allocation.ptr = ptr;
+					allocation.size = new_size;
+					std::cout << "successfully reallocated memory to " << allocation << std::endl;
+				} else {
+					std::cout << "failed to reallocate memory" << std::endl;
+				} print_status();
+			} else {
+				std::cout << "no allocations" << std::endl;
+			}
+		};
+
+		for (int i = 0; i < cmd_count; i++) {
+			std::cout << "cmd: " << i << std::endl;
+			int cmd = gen.gen(3);
+			switch (cmd) {
+				case 0: {
+					allocate();
+					break;
+				} case 1: {
+					deallocate();
+					break;
+				} case 2: {
+					reallocate();
+					break;
+				}
+			} std::cout << std::endl;
+		}
+
+		for (auto& [ptr, size, align] : allocations) {
+			alloc.free(ptr, size, align);
+		}
+
+		std::cout << "testing finished" << std::endl;
+
 		return 0;
 	}	
 }
@@ -172,5 +317,15 @@ namespace {
 int main() {
 	if (test_pool_alloc()) {
 		return -1;
-	} return 0;
+	} std::cout << std::endl;
+	
+	if (test_pool_growth()) {
+		return -1;
+	} std::cout << std::endl;
+	
+	if (test_pool_alloc_random()) {
+		return -1;
+	} std::cout << std::endl;
+
+	return 0;
 }

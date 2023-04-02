@@ -295,16 +295,22 @@ namespace cuw::mem {
 		addr_index_t* index{};
 	};
 
+	struct next_pool_params_t {
+		attrs_t size{};
+		attrs_t capacity{};
+	};
 
 	class pool_entry_ops_t {
 	public:
 		pool_entry_ops_t(attrs_t _chunk_enum = chunk_size_empty) : chunk_enum{_chunk_enum} {}
 
-		// size, capacity
-		inline std::tuple<attrs_t, attrs_t> get_next_pool_params(attrs_t pools, attrs_t min_pools, attrs_t max_pools) const {
+		// constraint resolution order (each constraint can violate previous constraints)
+		// 1. pools power
+		// 2. pool capacity
+		inline next_pool_params_t get_next_pool_params(attrs_t pools, attrs_t min_pools, attrs_t max_pools) const {
 			pools = std::clamp(pools, min_pools, max_pools);
 			attrs_t size = (attrs_t)1 << pools;
-			attrs_t capacity = std::min(size >> chunk_enum, max_pool_chunks);
+			attrs_t capacity = std::clamp(size >> chunk_enum, min_pool_chunks, max_pool_chunks);
 			return {capacity << chunk_enum, capacity};
 		}
 
@@ -350,7 +356,7 @@ namespace cuw::mem {
 		}
 
 	public:
-		std::tuple<attrs_t, attrs_t> get_next_pool_params(attrs_t min_pools, attrs_t max_pools) const {
+		next_pool_params_t get_next_pool_params(attrs_t min_pools, attrs_t max_pools) const {
 			return ops_t::get_next_pool_params(pools, min_pools, max_pools);
 		}
 
