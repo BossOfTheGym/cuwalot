@@ -17,6 +17,12 @@ if (MSVC)
 	add_compile_options("/Zc:preprocessor")
 endif()
 
+# workaround for exported symbols
+# TODO : DLLIMPORT/DLLEXPORT macros
+if (WIN32)
+	set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
+endif()
+
 # cpp standart
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

@@ -24,5 +24,6 @@ set(cuw_sources ${cuw_sources}
     mem/sys_alloc.hpp
 )
 
+# TODO : maybe I should configure SHARED/STATIC?
 add_library(cuw SHARED ${cuw_sources})
 target_include_directories(cuw PUBLIC "../")

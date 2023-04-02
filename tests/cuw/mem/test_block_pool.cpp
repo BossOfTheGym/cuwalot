@@ -5,6 +5,8 @@
 
 #include <cuw/mem/block_pool.hpp>
 
+#include "dummy_alloc.hpp"
+
 using namespace cuw;
 
 namespace {
@@ -20,6 +22,7 @@ namespace {
 
 		mem::block_pool_entry_t entry;
 
+		alignas(mem::block_align) char block_data[mem_pool_size * max_primary_blocks] = {};
 		void* primary_blocks[max_primary_blocks]{};
 
 		auto print_pool_stats = [&] (auto primary_block) {
@@ -42,8 +45,9 @@ namespace {
 		};
 
 		std::cout << "preallocating primary blocks" << std::endl;
-		for (auto& primary_block : primary_blocks) {
-			primary_block = std::aligned_alloc(mem::block_align, mem_pool_size);
+		for (int i = 0; i < max_primary_blocks; i++) {
+			auto& primary_block = primary_blocks[i];
+			primary_block = block_data + mem_pool_size * i;
 			std::cout << "primary block allocated: " << primary_block << std::endl;
 			entry.create_pool(primary_block, mem_pool_size);
 			print_pool_stats(primary_block);
@@ -107,7 +111,6 @@ namespace {
 			assert(ptr);
 			assert(size == mem_pool_size);
 			*found = nullptr;
-			free(ptr);
 			++blocks_released;
 			return true;
 		};
