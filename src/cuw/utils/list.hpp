@@ -198,6 +198,17 @@ namespace cuw::list {
 		init(list);
 	}
 
+	// func can be destructive operation
+	template<class node_t, class func_t>
+	void traverse(node_t* head, func_t func) {
+		node_t* curr = head->next;
+		while (curr != head) {
+			node_t* next = curr->next;
+			func(curr);
+			curr = next;
+		}
+	}
+
 	// can be used in ranged for loop
 	// returns node pointer on dereference
 	// not stl-usable in the most cases
