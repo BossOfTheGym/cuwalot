@@ -15,7 +15,7 @@ namespace cuw::mem {
 	struct alignas(block_align) free_block_descr_t {
 		using fbd_t = free_block_descr_t;
 
-		inline static bool overlap(fbd_t* fbd1, fbd_t* fbd2) {
+		inline static bool overlaps(fbd_t* fbd1, fbd_t* fbd2) {
 			auto l1 = (std::uintptr_t)fbd1->get_start();
 			auto r1 = (std::uintptr_t)fbd1->get_end();
 			auto l2 = (std::uintptr_t)fbd2->get_start();
@@ -113,6 +113,8 @@ namespace cuw::mem {
 		}
 	};
 
+	// TODO : rework so it can work in Windows
+	// yeah, it will break some tests, jeez
 	// all allocations will be multiple of page_size
 	// size is now size in bytes
 	// size cannot be less than page_size or block_align
@@ -190,7 +192,7 @@ namespace cuw::mem {
 			if (curr1 && curr2) {
 				fbd_t* fbd1 = fbd_t::size_index_to_descr(curr1);
 				fbd_t* fbd2 = fbd_t::size_index_to_descr(curr2);
-				if (fbd_t::overlap(fbd1, fbd2)) {
+				if (fbd_t::overlaps(fbd1, fbd2)) {
 					std::abort();
 				} if (fbd_t::preceds(fbd1, fbd2)) {
 					curr_fbd = fbd1;
@@ -240,7 +242,7 @@ namespace cuw::mem {
 			while (curr1 && curr2) {
 				fbd_t* fbd1 = fbd_t::size_index_to_descr(curr1);
 				fbd_t* fbd2 = fbd_t::size_index_to_descr(curr2);
-				if (fbd_t::overlap(fbd1, fbd2)) {
+				if (fbd_t::overlaps(fbd1, fbd2)) {
 					std::abort();
 				} if (fbd_t::preceds(fbd1, fbd2)) {
 					curr1 = curr1->right;
@@ -349,7 +351,7 @@ namespace cuw::mem {
 				left_node = bst::predecessor(lb_node);
 			} fbd_t* left = left_node ? fbd_t::addr_index_to_descr(left_node) : nullptr;
 
-			if (left && fbd_t::overlap(&dummy, left) || right && fbd_t::overlap(&dummy, right)) {
+			if (left && fbd_t::overlaps(&dummy, left) || right && fbd_t::overlaps(&dummy, right)) {
 				std::abort(); // most probably double free
 			}
 

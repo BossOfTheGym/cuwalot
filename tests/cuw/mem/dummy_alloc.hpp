@@ -46,9 +46,11 @@ namespace {
 		}
 
 		bool overlaps(const range_t& another) const {
-			auto a0 = (std::uintptr_t)get_start(), b0 = (std::uintptr_t)get_start();
-			auto a1 = (std::uintptr_t)another.get_start(), b1 = (std::uintptr_t)another.get_start();
-			return !(b0 <= a1 || b1 <= a0); // a1 < b0 && a0 < b1
+			auto l1 = (std::uintptr_t)get_start();
+			auto r1 = (std::uintptr_t)get_start();
+			auto l2 = (std::uintptr_t)another.get_start();
+			auto r2 = (std::uintptr_t)another.get_start();
+			return l2 < r1 && l1 < r2;
 		}
 
 		void* base_ptr{};
@@ -117,40 +119,46 @@ namespace {
 			assert(inserted);
 
 			auto merge_prev_curr = [&] (auto prev, auto curr) {
-				assert(curr != ranges.end());
-
-				if (prev != ranges.end() && prev->overlaps(*curr)) {
-					std::cerr << "overlap detected" << std::endl;
+				if (curr == ranges.end()) {
+					std::cerr << "curr is invalid" << std::endl;
 					std::abort();
-				} if (prev != ranges.end() && prev->get_end() == curr->get_start()) {
-					std::cout << "merging two ranges: " << *prev << " " << *curr << std::endl;
-					range_t new_range{nullptr, prev->ptr, prev->size + curr->size};
-					ranges.erase(prev);
-					ranges.erase(curr);
-					auto [new_curr, new_inserted] = ranges.insert(new_range);
-					assert(new_inserted);
-					std::cout << "merged into: " << *new_curr << std::endl;
-					return new_curr;
+				} if (prev != ranges.end()) {
+					std::cout << "merging " << *prev << " and " << *curr << std::endl; 
+					if (prev->overlaps(*curr)) {
+						std::cerr << "overlap detected" << std::endl;
+						std::abort();
+					} if (prev->get_end() == curr->get_start()) {
+						std::cout << "merging two ranges: " << *prev << " " << *curr << std::endl;
+						range_t new_range{nullptr, prev->ptr, prev->size + curr->size};
+						ranges.erase(prev);
+						ranges.erase(curr);
+						auto [new_curr, new_inserted] = ranges.insert(new_range);
+						assert(new_inserted);
+						std::cout << "merged into: " << *new_curr << std::endl;
+						return new_curr;
+					}
 				} return curr;
 			};
 
 			auto merge_curr_next = [&] (auto curr, auto next) {
-				assert(curr != ranges.end());
-
-				if (next != ranges.end() && curr->overlaps(*next)) {
-					std::cerr << "overlap detected" << std::endl;
+				if (curr == ranges.end()) {
+					std::cerr << "curr is invalid" << std::endl;
 					std::abort();
-				}
-
-				if (next != ranges.end() && curr->get_end() == next->get_start()) {
-					std::cout << "merging two ranges: " << *curr << " " << *next << std::endl;
-					range_t new_range{nullptr, curr->ptr, curr->size + next->size};
-					ranges.erase(curr);
-					ranges.erase(next);
-					auto [new_curr, new_inserted] = ranges.insert(new_range);
-					assert(new_inserted);
-					std::cout << "merged into: " << *new_curr << std::endl;
-					return new_curr;
+				} if (next != ranges.end()) {
+					std::cout << "merging " << *curr << " and " << *next << std::endl; 
+					if (curr->overlaps(*next)) {
+						std::cerr << "overlap detected" << std::endl;
+						std::abort();
+					} if (curr->get_end() == next->get_start()) {
+						std::cout << "merging two ranges: " << *curr << " " << *next << std::endl;
+						range_t new_range{nullptr, curr->ptr, curr->size + next->size};
+						ranges.erase(curr);
+						ranges.erase(next);
+						auto [new_curr, new_inserted] = ranges.insert(new_range);
+						assert(new_inserted);
+						std::cout << "merged into: " << *new_curr << std::endl;
+						return new_curr;
+					}
 				} return curr;
 			};
 

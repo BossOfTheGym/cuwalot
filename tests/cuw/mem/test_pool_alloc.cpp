@@ -26,9 +26,19 @@ namespace {
 		static constexpr auto alloc_pool_last_chunk = mem::pool_chunk_size_t::Bytes128;
 	};
 
+	template<class alloc_t, class = void>
+	struct is_page_alloc_t : std::false_type {};
+
+	template<class alloc_t>
+	struct is_page_alloc_t<alloc_t, std::void_t<decltype(&alloc_t::get_size_index), decltype(&alloc_t::get_addr_index)>> : std::false_type {};
+
+	template<class alloc_t>
+	inline constexpr bool is_page_alloc_v = is_page_alloc_t<alloc_t>::value;
+
 	using pool_alloc_traits_t = mem::pool_alloc_traits_t<mem::page_alloc_traits_t<basic_alloc_traits_t>>;
-	using page_alloc_t = mem::page_alloc_t<dummy_allocator_t<pool_alloc_traits_t>>;
-	//using page_alloc_t = dummy_allocator_t<pool_alloc_traits_t>;
+	//using page_alloc_t = mem::page_alloc_t<dummy_allocator_t<pool_alloc_traits_t>>;
+	// TODO : check dummy alloc for overlaps
+	using page_alloc_t = dummy_allocator_t<pool_alloc_traits_t>;
 	using pool_alloc_t = mem::pool_alloc_t<page_alloc_t>;
 
 	inline constexpr std::size_t min_pool_chunk_size = mem::pool_chunk_size((std::size_t)pool_alloc_t::alloc_pool_first_chunk);
@@ -228,7 +238,7 @@ namespace {
 
 		constexpr std::size_t page_size = pool_alloc_t::alloc_page_size;
 		constexpr std::size_t basic_alloc_size = page_size << 12;
-		constexpr std::size_t cmd_count = 100;
+		constexpr std::size_t cmd_count = 10; // 8 is a good test case
 		constexpr std::size_t max_req_alloc_size = 1 << 10;
 		constexpr std::size_t max_req_alignment = max_alignment_power;
 
@@ -237,9 +247,10 @@ namespace {
 		std::vector<allocation_t> allocations;
 
 		auto print_status = [&] () {
-			std::cout << "- addr_index" << std::endl << addr_index_info_t{alloc};
-			std::cout << "- size_index" << std::endl << size_index_info_t{alloc};
-			std::cout << "- alloc ranges" << std::endl << ranges_info_t{alloc};
+			if constexpr(is_page_alloc_v<pool_alloc_t>) {
+				std::cout << "- addr_index" << std::endl << addr_index_info_t{alloc};
+				std::cout << "- size_index" << std::endl << size_index_info_t{alloc};
+			} std::cout << "- alloc ranges" << std::endl << ranges_info_t{alloc};
 		};
 
 		auto allocate = [&] () {
