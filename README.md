@@ -4,6 +4,7 @@ Tree-based memory allocator. Utilizes red-black trees. The best allocator in the
 # TODO
 **rework**
 - page_alloc: add info blocks that will store info about initial allocated ranges
+- rework page_alloc tests
 - merge function in addr_cache and page_alloc
 
 **testing**
@@ -11,10 +12,11 @@ Tree-based memory allocator. Utilizes red-black trees. The best allocator in the
 
 **complete TODO**
 - testing in release mode
-- mem_api for windows
 - multithreading
 - test allocator
-- normal unit testing
+- decent unit testing
+- page_alloc: densening of fbd's
+- pool_alloc: densening of alloc_descr
 - Doxygen
 - README description
 - cmake install rules

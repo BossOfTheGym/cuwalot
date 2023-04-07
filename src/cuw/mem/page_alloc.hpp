@@ -113,7 +113,7 @@ namespace cuw::mem {
 		}
 	};
 
-	// TODO : rework so it can work in Windows
+	// TODO : rework so it can work on Windows
 	// yeah, it will break some tests, jeez
 	// all allocations will be multiple of page_size
 	// size is now size in bytes

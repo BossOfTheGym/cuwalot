@@ -51,6 +51,11 @@ namespace cuw::mem {
 
 	static_assert(sizeof(block_pool_t) == block_align);
 
+	struct block_info_t {
+		void* addr{};
+		attrs_t index{};
+	};
+
 	class block_pool_wrapper_t {
 	public:
 		using bp_t = block_pool_t;
@@ -65,7 +70,7 @@ namespace cuw::mem {
 
 	public:
 		// index is zero-based, zero block is the first block after pool block
-		[[nodiscard]] inline std::tuple<void*, attrs_t> acquire() {
+		[[nodiscard]] inline block_info_t acquire() {
 			attrs_t index = 0;
 			void* block = nullptr;
 			if (pool->head != block_pool_head_empty) {
@@ -255,7 +260,7 @@ namespace cuw::mem {
 		}
 
 		// returns block_mem, block_offset
-		[[nodiscard]] inline std::tuple<void*, attrs_t> acquire() {
+		[[nodiscard]] inline block_info_t acquire() {
 			bp_t* bp = base_t::peek();
 			if (!bp) {
 				return {nullptr, block_pool_head_empty};
