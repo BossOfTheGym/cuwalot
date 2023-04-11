@@ -35,13 +35,20 @@ namespace cuw::mem {
 		template<class alloc_traits_t>
 		struct alloc_block_pool_size_t<alloc_traits_t,
 			std::void_t<enable_option_t<std::size_t, decltype(alloc_traits_t::alloc_block_pool_size)>>> {
-		private:
-			static constexpr std::size_t _alloc_page_size = alloc_page_size_t<alloc_traits_t>::alloc_page_size; 
-		public:
-			static constexpr std::size_t alloc_block_pool_size = alloc_traits_t::alloc_block_pool_size; 
-			static_assert(is_aligned(alloc_block_pool_size, _alloc_page_size));
-			static_assert(is_aligned(alloc_block_pool_size, block_align));
+			static constexpr std::size_t alloc_block_pool_size = alloc_traits_t::alloc_block_pool_size;
 			static_assert(alloc_block_pool_size / block_align >= min_pool_blocks);
+		};
+
+		template<class alloc_traits_t, class = void>
+		struct alloc_sysmem_pool_size_t {
+			static constexpr std::size_t alloc_block_pool_size = default_block_pool_size;
+		};
+
+		template<class alloc_traits_t>
+		struct alloc_sysmem_pool_size_t<alloc_traits_t,
+			std::void_t<enable_option_t<std::size_t, decltype(alloc_traits_t::alloc_sysmem_pool_size)>>> {
+			static constexpr std::size_t alloc_sysmem_pool_size = alloc_traits_t::alloc_sysmem_pool_size;
+			static_assert(alloc_sysmem_pool_size / block_align >= min_pool_blocks);
 		};
 
 		template<class alloc_traits_t, class = void>
@@ -52,11 +59,8 @@ namespace cuw::mem {
 		template<class alloc_traits_t>
 		struct alloc_min_block_size_t<alloc_traits_t,
 			std::void_t<enable_option_t<std::size_t, decltype(alloc_traits_t::alloc_min_block_size)>>> {
-		private:
-			static constexpr std::size_t _alloc_page_size = alloc_page_size_t<alloc_traits_t>::alloc_page_size;
-		public:
 			static constexpr std::size_t alloc_min_block_size = alloc_traits_t::alloc_min_block_size;
-			static_assert(alloc_min_block_size != 0 && alloc_min_block_size % _alloc_page_size == 0);
+			static_assert(alloc_min_block_size > 0);
 		};
 
 		template<class alloc_traits_t, class = void>
@@ -273,6 +277,7 @@ namespace cuw::mem {
 
 		static constexpr std::size_t alloc_page_size = impl::alloc_page_size_t<traits_t>::alloc_page_size;
 		static constexpr std::size_t alloc_block_pool_size = impl::alloc_block_pool_size_t<traits_t>::alloc_block_pool_size;
+		static constexpr std::size_t alloc_sysmem_pool_size = impl::alloc_sysmem_pool_size_t<traits_t>::alloc_sysmem_pool_size;
 		static constexpr std::size_t alloc_min_block_size = impl::alloc_min_block_size_t<traits_t>::alloc_min_block_size;
 	};
 

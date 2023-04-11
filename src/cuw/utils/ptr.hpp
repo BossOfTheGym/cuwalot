@@ -16,7 +16,7 @@ namespace cuw {
 		return std::launder((obj_t*)((char*)base - offset));
 	}
 
-	#define base_to_obj(base, obj, field) __base_to_obj<obj>((base), offsetof(obj, field))
+	#define base_to_obj(base, obj_type, field) __base_to_obj<obj_type>((base), offsetof(obj_type, field))
 
 	// little tagged_ptr utility
 	// you can store and retrieve a pointer from here as well as data

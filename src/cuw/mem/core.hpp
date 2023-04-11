@@ -40,6 +40,7 @@ namespace cuw::mem {
 
 	inline constexpr bool default_use_resolved_page_size = false;
 	inline constexpr std::size_t default_block_pool_size = 1 << 16; // 64K
+	inline constexpr std::size_t default_sysmem_pool_size = 1 << 14; // 16K
 	inline constexpr std::size_t default_page_size = 1 << 12; // 4K
 	inline constexpr std::size_t default_min_block_size = (std::size_t)1 << 24; // 16M
 
