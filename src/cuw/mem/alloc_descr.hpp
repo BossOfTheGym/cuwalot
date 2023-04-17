@@ -25,21 +25,22 @@ namespace cuw::mem {
 	// count(14): how many chunks were allocated(are in use)
 	// head(14): pointer to the next free chunk
 	// data: pointer to start of the pool
+	template<class = void>
 	struct alignas(block_align) alloc_descr_t {
 		using ad_t = alloc_descr_t;
 
-		inline static ad_t* addr_index_to_descr(addr_index_t* addr) {
+		static ad_t* addr_index_to_descr(addr_index_t* addr) {
 			return base_to_obj(addr, ad_t, addr_index);
 		}
 
-		inline static ad_t* list_entry_to_descr(alloc_descr_list_t* list) {
+		static ad_t* list_entry_to_descr(alloc_descr_list_t* list) {
 			return base_to_obj(list, ad_t, list_entry);
 		}
 
 		// key_ops for tree
 		struct addr_ops_t : trb::implicit_key_t<addr_index_t> {
 			// overload used for insertion of a new description into the tree
-			inline bool compare(addr_index_t* node1, addr_index_t* node2) {
+			bool compare(addr_index_t* node1, addr_index_t* node2) {
 				auto addr1 = (std::uintptr_t)addr_index_to_descr(node1)->data;
 				auto addr2 = (std::uintptr_t)addr_index_to_descr(node2)->data;
 				return addr1 < addr2; // non-intersecting ranges
@@ -52,65 +53,65 @@ namespace cuw::mem {
 			// so if addr, for example, belongs to the range [start_2, end_2)
 			// this range will be the first item satisfying the binary search in the tree
 			// (first range to fail the condition addr >= block_end)
-			inline bool compare(addr_index_t* node, void* addr) {
+			bool compare(addr_index_t* node, void* addr) {
 				ad_t* descr = addr_index_to_descr(node);
 				return (std::uintptr_t)addr >= (std::uintptr_t)descr->block_end();
 			}
 		};
 
 
-		inline attrs_t get_type() const {
+		attrs_t get_type() const {
 			return type;
 		}
 
-		inline attrs_t get_size() const {
+		attrs_t get_size() const {
 			return size;
 		}
 
-		inline attrs_t get_chunk_size() const {
+		attrs_t get_chunk_size() const {
 			return chunk_size;
 		}
 
-		inline attrs_t get_offset() const {
+		attrs_t get_offset() const {
 			return offset;
 		}
 
-		inline void* get_data() const {
+		void* get_data() const {
 			return data;
 		}
 
 		// only valid for raw allocation (well, also for pool)
-		inline attrs_t get_alignment() const {
+		attrs_t get_alignment() const {
 			return pool_chunk_size(chunk_size);
 		}
 
 		// only valid for raw allocation (well, also for pool)
-		inline attrs_t get_true_size() const {
+		attrs_t get_true_size() const {
 			return align_value(size, get_alignment());
 		}
 
 
-		inline void set_data(void* value) {
+		void set_data(void* value) {
 			data = value;
 		}
 
-		inline void set_size(attrs_t value) {
+		void set_size(attrs_t value) {
 			size = value;
 		}
 
 
-		inline bool has_addr(void* addr) const {
+		bool has_addr(void* addr) const {
 			auto addr_value = (std::uintptr_t)addr;
 			auto data_value = (std::uintptr_t)data;
 			return data_value <= addr_value && addr_value < data_value + size;
 		}
 
 
-		inline void* block_start() const {
+		void* block_start() const {
 			return data;
 		}
 
-		inline void* block_end() const {
+		void* block_end() const {
 			return (void*)((std::uintptr_t)data + get_size());
 		}
 
@@ -123,79 +124,80 @@ namespace cuw::mem {
 
 	static_assert(sizeof(alloc_descr_t) == block_align);
 
+	template<class = void>
 	class alloc_descr_wrapper_t {
 	public:
 		using ad_t = alloc_descr_t;
 
 		alloc_descr_wrapper_t(ad_t* _descr = nullptr) : descr{_descr} {}
 
-		inline bool has_addr(void* addr) const {
+		bool has_addr(void* addr) const {
 			return descr->has_addr(addr);
 		}
 
-		inline bool empty() const {
+		bool empty() const {
 			return descr->count == 0;
 		}
 
-		inline bool full() const {
+		bool full() const {
 			return descr->count == descr->capacity;
 		}
 
-		inline bool has_capacity() const {
+		bool has_capacity() const {
 			return descr->used < descr->capacity;
 		}
 
 
-		inline attrs_t get_capacity() const {
+		attrs_t get_capacity() const {
 			return descr->capacity;
 		}
 
-		inline attrs_t get_used() const {
+		attrs_t get_used() const {
 			return descr->used;
 		}
 
-		inline attrs_t get_count() const {
+		attrs_t get_count() const {
 			return descr->count;
 		}
 
-		inline attrs_t get_head() const {
+		attrs_t get_head() const {
 			return descr->head;
 		}
 
-		inline void* get_data() const {
+		void* get_data() const {
 			return descr->data;
 		}
 
-		inline attrs_t get_size() const {
+		attrs_t get_size() const {
 			return descr->size;
 		}
 
 
-		inline attrs_t inc_used() {
+		attrs_t inc_used() {
 			return descr->used++;
 		}
 
-		inline attrs_t dec_used() {
+		attrs_t dec_used() {
 			return descr->used--;
 		}
 
-		inline attrs_t inc_count() {
+		attrs_t inc_count() {
 			return descr->count++;
 		}
 
-		inline attrs_t dec_count() {
+		attrs_t dec_count() {
 			return descr->count--;
 		}
 
-		inline void set_head(attrs_t value) {
+		void set_head(attrs_t value) {
 			descr->head = value;
 		}
 
-		inline void set_descr(ad_t* value) {
+		void set_descr(ad_t* value) {
 			descr = value;
 		} 
 
-		inline ad_t* get_descr() const {
+		ad_t* get_descr() const {
 			return descr;
 		}
 
@@ -205,31 +207,32 @@ namespace cuw::mem {
 
 	using basic_alloc_descr_cache_t = list_cache_t<alloc_descr_list_t>;
 
+	template<class = void>
 	class alloc_descr_cache_t : protected basic_alloc_descr_cache_t {
 	public:
 		using ad_t = alloc_descr_t;
 		using adl_t = alloc_descr_list_t;
 		using base_t = basic_alloc_descr_cache_t;
 
-		inline void insert(ad_t* descr) {
+		void insert(ad_t* descr) {
 			base_t::insert(&descr->list_entry);
 		}
 
-		inline void reinsert(ad_t* descr) {
+		void reinsert(ad_t* descr) {
 			base_t::reinsert(&descr->list_entry);
 		}
 
-		inline void erase(ad_t* descr) {
+		void erase(ad_t* descr) {
 			base_t::erase(&descr->list_entry);
 		}
 
-		inline ad_t* peek() const {
+		ad_t* peek() const {
 			if (adl_t* adl = base_t::peek()) {
 				return ad_t::list_entry_to_descr(adl);
 			} return nullptr;
 		}
 
-		inline ad_t* find(void* addr, int max_lookups) {
+		ad_t* find(void* addr, int max_lookups) {
 			auto curr = base_t::begin();
 			auto head = base_t::end();
 			for (int i = 0; curr != head && i < max_lookups; i++, curr++) {
@@ -239,7 +242,7 @@ namespace cuw::mem {
 			} return nullptr;
 		}
 
-		inline void adopt(alloc_descr_cache_t& another, int first_part) {
+		void adopt(alloc_descr_cache_t& another, int first_part) {
 			base_t part1, part2, part3, part4;
 			base_t::split(first_part, part1, part2);
 			another.split(first_part, part3, part4);
@@ -263,19 +266,22 @@ namespace cuw::mem {
 		}
 	};
 
+	template<class = void>
 	class alloc_descr_addr_cache_t {
 	public:
 		using ad_t = alloc_descr_t;
 
-		inline void insert(ad_t* descr) {
+		void insert(ad_t* descr) {
 			index = trb::insert_lb(index, &descr->addr_index, ad_t::addr_ops_t{});
+			++count;
 		}
 
-		inline void erase(ad_t* descr) {
+		void erase(ad_t* descr) {
 			index = trb::remove(index, &descr->addr_index);
+			--count;
 		}
 
-		inline ad_t* find(void* addr) {
+		ad_t* find(void* addr) {
 			// lower_bound search can guarantee that addr < block end but it doesn't guarantee that addr belongs to block
 			if (addr_index_t* found = bst::lower_bound(index, ad_t::addr_ops_t{}, addr)) {
 				ad_t* descr = ad_t::addr_index_to_descr(found);
@@ -283,16 +289,24 @@ namespace cuw::mem {
 			} return nullptr;
 		}
 
-		// TODO : two strategies : flatten-merge-rebuild and insert-from-another
-		inline void adopt(alloc_descr_addr_cache_t& another) {
-			bst::traverse_inorder(another.index, [&] (addr_index_t* addr) {
-				index = trb::insert_lb(index, addr, ad_t::addr_ops_t{});
+		void adopt(alloc_descr_addr_cache_t& another) {
+			addr_index_t* merge_into = index;
+			addr_index_t* merge_from = another.index;
+			if (count < another.count) {
+				std::swap(merge_into, merge_from);
+			}
+			bst::traverse_inorder(merge_from, [&] (addr_index_t* addr) {
+				merge_into = trb::insert_lb(merge_into, addr, ad_t::addr_ops_t{});
 			});
+			index = merge_into;
+			count += another.count;
 			another.index = nullptr;
+			another.count = 0;
 		}
 
 	private:
 		addr_index_t* index{};
+		std::size_t count{};
 	};
 
 	struct next_pool_params_t {
@@ -300,6 +314,7 @@ namespace cuw::mem {
 		attrs_t capacity{};
 	};
 
+	template<class = void>
 	class pool_entry_ops_t {
 	public:
 		pool_entry_ops_t(attrs_t _chunk_enum = chunk_size_empty) : chunk_enum{_chunk_enum} {}
@@ -307,22 +322,22 @@ namespace cuw::mem {
 		// constraint resolution order (each constraint can violate previous constraints)
 		// 1. pools power
 		// 2. pool capacity
-		inline next_pool_params_t get_next_pool_params(attrs_t pools, attrs_t min_pools, attrs_t max_pools) const {
+		next_pool_params_t get_next_pool_params(attrs_t pools, attrs_t min_pools, attrs_t max_pools) const {
 			pools = std::clamp(pools, min_pools, max_pools);
 			attrs_t size = (attrs_t)1 << pools;
 			attrs_t capacity = std::clamp(size >> chunk_enum, min_pool_chunks, max_pool_chunks);
 			return {capacity << chunk_enum, capacity};
 		}
 
-		inline attrs_t get_chunk_size() const {
+		attrs_t get_chunk_size() const {
 			return pool_chunk_size(chunk_enum);
 		}
 
-		inline attrs_t get_chunk_size_enum() const {
+		attrs_t get_chunk_size_enum() const {
 			return chunk_enum;
 		}
 
-		inline attrs_t get_max_alignment() const {
+		attrs_t get_max_alignment() const {
 			return pool_alignment<attrs_t>(chunk_enum);
 		}
 
@@ -330,16 +345,12 @@ namespace cuw::mem {
 		attrs_t chunk_enum{};
 	};
 
-	enum class pool_checks_policy_t {
-		Default
-	};
-
 
 	// chunk_size: size of allocated chunk, real value not enum
 	// type: block_type_t value, must be pool-like
 	// free_cache: list of description blocks (pools) that have free chunks
 	// full_cache: list of description blocks (pools) that have no free chunks
-	template<pool_checks_policy_t check_policy>
+	template<class = void>
 	class alloc_descr_pool_cache_t : public pool_entry_ops_t {
 	public:
 		using ops_t = pool_entry_ops_t;
@@ -441,11 +452,8 @@ namespace cuw::mem {
 		attrs_t pools{};
 	};
 
-	enum raw_check_policy_t {
-		Default
-	};
 
-	template<raw_check_policy_t check_policy>
+	template<class = void>
 	class alloc_descr_raw_cache_t : public alloc_descr_cache_t {
 	public:
 		using ad_t = alloc_descr_t;
