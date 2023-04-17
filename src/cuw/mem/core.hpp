@@ -39,10 +39,11 @@ namespace cuw::mem {
 	inline constexpr std::size_t block_align = 64;
 
 	inline constexpr bool default_use_resolved_page_size = false;
-	inline constexpr std::size_t default_block_pool_size = 1 << 16; // 64K
-	inline constexpr std::size_t default_sysmem_pool_size = 1 << 14; // 16K
 	inline constexpr std::size_t default_page_size = 1 << 12; // 4K
-	inline constexpr std::size_t default_min_block_size = (std::size_t)1 << 24; // 16M
+	inline constexpr std::size_t default_block_pool_size = 1 << 14; // 16K
+	inline constexpr std::size_t default_sysmem_pool_size = 1 << 12; // 4K
+	inline constexpr std::size_t default_min_block_size = (std::size_t)1 << 24; // 16
+	inline constexpr std::size_t default_merge_coef = 4;
 
 	inline constexpr attrs_t default_min_pool_power = 15; // 32K
 	inline constexpr attrs_t default_max_pool_power = 22; // 4M
@@ -68,10 +69,10 @@ namespace cuw::mem {
 	using void_node_t = trb::tree_node_packed_t<void_node_traits_t, tag_t>;
 
 	struct addr_index_tag_t;
-	using addr_index_t = void_node_t<>; // maybe the same node will be better, but type safety...???
+	using addr_index_t = void_node_t<>;
 
 	struct size_index_tag_t;
-	using size_index_t = void_node_t<>; // maybe the same node will be better, but type safety...???
+	using size_index_t = void_node_t<>;
 
 	using list_entry_t = list::entry_t;
 

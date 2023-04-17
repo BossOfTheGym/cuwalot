@@ -264,7 +264,9 @@ namespace cuw::mem {
 		// deallocates description, does not free associated memory
 		void free_descr(void* descr, attrs_t offset) {
 			if (bp_t* released = ad_entry.release(descr, offset)) {
-				ad_entry.finish_release(released, [&] (void* data, std::size_t size) { base_t::deallocate(data, size); });
+				ad_entry.finish_release(released, [&] (void* data, std::size_t size) {
+					base_t::deallocate(data, size);
+				});
 			}
 		}
 

@@ -12,10 +12,11 @@ namespace cuw::mem {
 	// offset(16): offset from prime block
 	// size(48): size of the block in bytes (page_size aligned)
 	// data: pointer to data
+	template<class = void>
 	struct alignas(block_align) free_block_descr_t {
 		using fbd_t = free_block_descr_t;
 
-		inline static bool overlaps(fbd_t* fbd1, fbd_t* fbd2) {
+		static bool overlaps(fbd_t* fbd1, fbd_t* fbd2) {
 			auto l1 = (std::uintptr_t)fbd1->get_start();
 			auto r1 = (std::uintptr_t)fbd1->get_end();
 			auto l2 = (std::uintptr_t)fbd2->get_start();
@@ -23,28 +24,28 @@ namespace cuw::mem {
 			return l2 < r1 && l1 < r2;
 		}
 
-		inline static bool preceds(fbd_t* fbd1, fbd_t* fbd2) {
+		static bool preceds(fbd_t* fbd1, fbd_t* fbd2) {
 			return (std::uintptr_t)fbd1->get_start() < (std::uintptr_t)fbd2->get_start();
 		}
 
-		inline static fbd_t* addr_index_to_descr(addr_index_t* ptr) {
+		static fbd_t* addr_index_to_descr(addr_index_t* ptr) {
 			return base_to_obj(ptr, fbd_t, addr_index); // OOP is for suckers
 		}
 
-		inline static fbd_t* size_index_to_descr(size_index_t* ptr) {
+		static fbd_t* size_index_to_descr(size_index_t* ptr) {
 			return base_to_obj(ptr, fbd_t, size_index); // OOP is for suckers
 		}
 
 		struct addr_ops_t : trb::implicit_key_t<addr_index_t> {
 			// order blocks by block start
-			inline bool compare(addr_index_t* node1, addr_index_t* node2) const {
+			bool compare(addr_index_t* node1, addr_index_t* node2) const {
 				auto addr1 = (std::uintptr_t)addr_index_to_descr(node1)->get_start();
 				auto addr2 = (std::uintptr_t)addr_index_to_descr(node2)->get_start();
 				return addr1 < addr2; // non-intersecting ranges
 			}
 
 			// search first block containing ptr (upper_bound search)
-			inline bool compare(addr_index_t* node, void* ptr) const {
+			bool compare(addr_index_t* node, void* ptr) const {
 				auto ptr_value = (std::uintptr_t)ptr;
 				return ptr_value >= (std::uintptr_t)addr_index_to_descr(node)->get_end();
 			}
@@ -52,39 +53,39 @@ namespace cuw::mem {
 
 		struct size_ops_t : trb::implicit_key_t<size_index_t> {
 			// order block by block size
-			inline bool compare(size_index_t* node1, size_index_t* node2) const {
+			bool compare(size_index_t* node1, size_index_t* node2) const {
 				return size_index_to_descr(node1)->size < size_index_to_descr(node2)->size;
 			}
 
 			// search first block with size greater than or equal to size
-			inline bool compare(size_index_t* node, std::size_t size) const {
+			bool compare(size_index_t* node, std::size_t size) const {
 				return size_index_to_descr(node)->size < size;
 			}
 		};
 
-		inline void* get_start() const {
+		void* get_start() const {
 			return data;
 		}
 
-		inline void* get_end() const {
+		void* get_end() const {
 			return (char*)data + size;
 		}
 
-		inline void extend_right(std::size_t amount) {
+		void extend_right(std::size_t amount) {
 			size += amount;
 		}
 
-		inline void extend_left(std::size_t amount) {
+		void extend_left(std::size_t amount) {
 			size += amount;
 			data = (char*)data - amount;
 		}
 
-		inline void shrink_left(std::size_t amount) {
+		void shrink_left(std::size_t amount) {
 			size -= amount;
 			data = (char*)data + amount;
 		}
 
-		inline void shrink_right(std::size_t amount) {
+		void shrink_right(std::size_t amount) {
 			size -= amount;
 		}
 
@@ -96,19 +97,20 @@ namespace cuw::mem {
 
 	static_assert(sizeof(free_block_descr_t) == block_align);
 
+	template<class = void>
 	struct alignas(block_align) sysmem_descr_t {
 		using smd_t = sysmem_descr_t;
 
-		inline static smd_t* addr_index_to_descr(addr_index_t* index) {
+		static smd_t* addr_index_to_descr(addr_index_t* index) {
 			return base_to_obj(index, smd_t, addr_index);
 		}
 
-		inline static smd_t* size_index_to_descr(size_index_t* index) {
+		static smd_t* size_index_to_descr(size_index_t* index) {
 			return base_to_obj(index, smd_t, addr_index);
 		}
 
 		struct addr_ops_t : trb::implicit_key_t<addr_index_t> {
-			inline bool compare(addr_index_t* node1, addr_index_t* node2) const {
+			bool compare(addr_index_t* node1, addr_index_t* node2) const {
 				auto data1 = (std::uintptr_t)addr_index_to_descr(node1)->get_start();
 				auto data2 = (std::uintptr_t)addr_index_to_descr(node2)->get_start();
 				return data1 < data2;
@@ -116,21 +118,21 @@ namespace cuw::mem {
 		};
 
 		struct size_ops_t : trb::implicit_key_t<size_index_t> {
-			inline bool compare(size_index_t* node1, size_index_t* node2) const {
+			bool compare(size_index_t* node1, size_index_t* node2) const {
 				return size_index_to_descr(node1)->size < size_index_to_descr(node2)->size;
 			}
 		};
 
-		inline void* get_start() const {
+		void* get_start() const {
 			return data;
 		}
 
-		inline void* get_end() const {
+		void* get_end() const {
 			return (char*)data + size;
 		}
 
-		addr_index_t addr_index;
-		size_index_t size_index;
+		addr_index_t addr_index; // can be used, for example, for tracking if region is free or not
+		size_index_t size_index; // pretty useless now, can be thrown away, but exists
 		attrs_t offset:16, size:48;
 		void* data;
 	};
@@ -175,13 +177,15 @@ namespace cuw::mem {
 	using sysmem_descr_entry_t = descr_entry_t<sysmem_descr_t>;
 
 	// TODO : rework so it can work on Windows
-	// TODO : align size
+	// TODO : align size: block_pool_size to page_size, so, align whatever you see to page_size
 	// yeah, it will break some tests, jeez
+	// TODO : merge strategies
+	// TODO : merge threshold
+
 	// all allocations will be multiple of page_size
 	// size is now size in bytes
 	// size cannot be less than page_size or block_align
-	// main feature of this allocator: less than wasted byte for each allocated byte
-	// and O(7 * log(n)) complexity at its finest
+	// O(7 * log(n)) complexity at its finest on deallocation
 	template<class basic_alloc_t>
 	class page_alloc_t : public basic_alloc_t {
 	public:
@@ -199,14 +203,14 @@ namespace cuw::mem {
 			if constexpr(base_t::use_resolved_page_size) {
 				page_size = base_t::alloc_page_size;
 			} else {
-				auto [info, status] = get_sysmem_info();
-				if (!status) {
+				if (auto [info, status] = get_sysmem_info(); status == 0) {
 					page_size = info.page_size;
 				} else {
 					page_size = base_t::alloc_page_size;
 				}
 			}
 			block_pool_size = align_value(base_t::alloc_block_pool_size, page_size);
+			sysmem_pool_size = align_value(base_t::alloc_sysmem_pool_size, page_size);
 			min_block_size = align_value(base_t::alloc_min_block_size, page_size);
 		}
 
@@ -220,64 +224,49 @@ namespace cuw::mem {
 		page_alloc_t& operator = (const page_alloc_t&) = delete;
 		page_alloc_t& operator = (page_alloc_t&&) = delete;
 
-		// this function does not modify index
-		// TODO : two strategies : flatten-merge-rebuild and insert-from-another 
-		void adopt(page_alloc_t& another) {
-			assert(page_size == another.page_size); // a little bit redundant
+	private:
+		void merge_fbds_insertion(page_alloc_t& another) {
+			fbd_entry.adopt(another.fbd_entry); // we now posess all fbd entries, so we can free them from this allocator
+			bst::traverse_inorder(another.fbd_addr, [&] (addr_index_t* node) {
+				fbd_t* fbd = fbd_t::addr_index_to_descr(node);
+				insert_free_block(get_coalesce_info(fbd->data, fbd->size));
+			});
+			another.fbd_addr = nullptr;
+			another.fbd_size = nullptr;
+			release_empty_pools();
+		}
 
-			if (this == &another) {
-				return;
-			}
+		void merge_fbds_flatten(page_alloc_t& another) { 
+			fbd_entry.adopt(another.fbd_entry); // we now posess all fbd entries, so we can free them from this allocator
 
-			base_t::adopt(another);
-
-			// we now posess all fbd entries 
-			fbd_entry.adopt(another.fbd_entry);
-
-			// we flatten addr_index into singly-linked list built on size_index
-			// left <=> prev
-			// right <=> next
-			// list is terminated by nullptr
-			auto flatten_addr_index = [] (addr_index_t* index) -> size_index_t* {
-				size_index_t head{};
-				size_index_t* tail = &head;
-				for (auto entry : bst::tree_wrapper_t{index}) {
-					tail->right = &fbd_t::addr_index_to_descr(entry)->size_index;
-					tail = tail->right;
-				}
-				tail->right = nullptr;
-				return head.right;
-			};
-
-			size_index_t* curr1 = flatten_addr_index(fbd_addr);
-			size_index_t* curr2 = flatten_addr_index(another.fbd_addr);
+			auto [curr1, curr1_tail] = bst::flatten(fbd_addr);
+			auto [curr2, curr2_tail] = bst::flatten(another.fbd_addr);
 
 			fbd_t* curr_fbd = nullptr;
 			if (curr1 && curr2) {
-				fbd_t* fbd1 = fbd_t::size_index_to_descr(curr1);
-				fbd_t* fbd2 = fbd_t::size_index_to_descr(curr2);
+				fbd_t* fbd1 = fbd_t::addr_index_to_descr(curr1);
+				fbd_t* fbd2 = fbd_t::addr_index_to_descr(curr2);
 				if (fbd_t::overlaps(fbd1, fbd2)) {
 					std::abort();
 				} if (fbd_t::preceds(fbd1, fbd2)) {
 					curr_fbd = fbd1;
-					curr1 = curr1->right;
+					curr1 = curr1->left;
 				} else {
 					curr_fbd = fbd2;
-					curr2 = curr2->right;
+					curr2 = curr2->left;
 				}
 			} else if (curr1) {
-				curr_fbd = fbd_t::size_index_to_descr(curr1);
-				curr1 = curr1->right;
+				curr_fbd = fbd_t::addr_index_to_descr(curr1);
+				curr1 = curr1->left;
 			} else if (curr2){
-				curr_fbd = fbd_t::size_index_to_descr(curr2);
-				curr2 = curr2->right;
+				curr_fbd = fbd_t::addr_index_to_descr(curr2);
+				curr2 = curr2->left;
 			} else {
 				release_empty_pools();
 				return; // both allocators are empty
 			}
 
-			size_index_t merged_head{};
-			size_index_t* merged_tail = &merged_head;
+			bst::head_tail_t<addr_index_t> merged;
 
 			auto try_merge = [&] (fbd_t* dst, fbd_t* src) {
 				if (dst->get_end() == src->get_start()) {
@@ -287,8 +276,7 @@ namespace cuw::mem {
 			};
 
 			auto add_fbd = [&] (fbd_t* fbd) {
-				merged_tail->right = &fbd->size_index;
-				merged_tail = merged_tail->right;
+				merged.append(&fbd->addr_index);
 			};
 
 			auto merge_fbd = [&] (fbd_t* fbd1, fbd_t* fbd2) {
@@ -301,51 +289,93 @@ namespace cuw::mem {
 				}
 			};
 
-			auto end_list = [&] () { merged_tail->right = nullptr; };
-
 			while (curr1 && curr2) {
-				fbd_t* fbd1 = fbd_t::size_index_to_descr(curr1);
-				fbd_t* fbd2 = fbd_t::size_index_to_descr(curr2);
+				fbd_t* fbd1 = fbd_t::addr_index_to_descr(curr1);
+				fbd_t* fbd2 = fbd_t::addr_index_to_descr(curr2);
 				if (fbd_t::overlaps(fbd1, fbd2)) {
 					std::abort();
 				} if (fbd_t::preceds(fbd1, fbd2)) {
-					curr1 = curr1->right;
+					curr1 = curr1->left;
 					curr_fbd = merge_fbd(curr_fbd, fbd1);
 				} else {
-					curr2 = curr2->right;
+					curr2 = curr2->left;
 					curr_fbd = merge_fbd(curr_fbd, fbd2);
 				}
 			} while (curr1) {
-				fbd_t* fbd = fbd_t::size_index_to_descr(curr1);
-				curr1 = curr1->right;
+				fbd_t* fbd = fbd_t::addr_index_to_descr(curr1);
+				curr1 = curr1->left;
 				curr_fbd = merge_fbd(curr_fbd, fbd);
 			} while (curr2) {
 				fbd_t* fbd = fbd_t::size_index_to_descr(curr2);
-				curr2 = curr2->right;
+				curr2 = curr2->left;
 				curr_fbd = merge_fbd(curr_fbd, fbd);
-			}
-			add_fbd(curr_fbd);
-			end_list();
+			} add_fbd(curr_fbd);
 
 			// rebuilding indices;
 			addr_index_t* new_addr_index = nullptr;
-			for (size_index_t* curr = merged_head.right; curr; curr = curr->right) {
-				fbd_t* fbd = fbd_t::size_index_to_descr(curr);
+			for (addr_index_t* curr = merged.head->left; curr; curr = curr->left) {
+				fbd_t* fbd = fbd_t::addr_index_to_descr(curr);
 				new_addr_index = trb::insert_lb(new_addr_index, &fbd->addr_index, fbd_t::addr_ops_t{});
 			}
 
 			size_index_t* new_size_index = nullptr;
-			for (addr_index_t* curr : bst::tree_wrapper_t{new_addr_index}) {
-				fbd_t* fbd = fbd_t::addr_index_to_descr(curr);
+			bst::traverse_inorder(new_addr_index, [&] (addr_index_t* node) {
+				fbd_t* fbd = fbd_t::addr_index_to_descr(node);
 				new_size_index = trb::insert_lb(new_size_index, &fbd->size_index, fbd_t::size_ops_t{});
-			}
+			});
 
 			fbd_addr = new_addr_index;
 			fbd_size = new_size_index;
 			another.fbd_addr = nullptr;
 			another.fbd_size = nullptr;
-
 			release_empty_pools();
+		}
+
+		void merge_fbds(page_alloc_t& another) {
+			std::size_t a = fbd_entry.get_count();
+			std::size_t b = another.fbd_entry.get_count();
+			std::size_t d = (a < b ? b - a : a - b);
+			std::size_t k = base_t::alloc_merge_coef;
+			if ((a + b) / d > k) {
+				merge_fbds_flatten(another);
+			} else {
+				merge_fbds_insertion(another);
+			}
+		}
+
+		void merge_smds(page_alloc_t& another) {
+			addr_index_t* merge_addr_into = smd_addr;
+			size_index_t* merge_size_into = smd_size;
+			addr_index_t* merge_addr_from = another.smd_addr;
+			size_index_t* merge_size_from = another.smd_size;
+			if (smd_entry.get_count() < another.smd_entry.get_count()) {
+				std::swap(merge_addr_from, merge_addr_into);
+				std::swap(merge_size_from, merge_size_into);
+			}
+
+			bst::traverse_inorder(merge_addr_from, [&] (addr_index_t* node) {
+				merge_addr_into = trb::insert_lb(merge_addr_into, node, smd_t::addr_ops_t{});
+			});
+			bst::traverse_inorder(merge_size_from, [&] (size_index_t* node) {
+				merge_size_into = trb::insert_lb(merge_size_into, node, smd_t::size_ops_t{});
+			});
+
+			smd_entry.adopt(another.smd_entry);
+			smd_addr = merge_addr_into;
+			smd_size = merge_size_into;
+			another.smd_addr = nullptr;
+			another.smd_size = nullptr;
+		}
+
+	public:
+		// this function modifies index
+		void adopt(page_alloc_t& another) {
+			if (this == &another) {
+				return;
+			}
+			base_t::adopt(another);
+			merge_fbds(another);
+			merge_smds(another);
 		}
 
 		// this function does not modify index
@@ -354,9 +384,11 @@ namespace cuw::mem {
 			fbd_addr = nullptr;
 			fbd_size = nullptr;
 			fbd_entry.release_all([&] (void* block, std::size_t size) { return true; });
+
 			bst::traverse_inorder(smd_addr, [&] (size_index_t* node) {
 				smd_t* smd = smd_t::size_index_to_descr(node);
 				base_t::deallocate(smd->get_start(), smd->get_size());
+				// we don't need to deallocate them properly
 			});
 			smd_addr = nullptr;
 			smd_size = nullptr;
@@ -489,8 +521,8 @@ namespace cuw::mem {
 		}
 
 		// this function does not modify index
-		void release_fbd(fbd_t* block) {
-			fbd_entry.release(block);
+		void release_fbd(fbd_t* fbd) {
+			fbd_entry.release(fbd);
 		}
 
 		// this function does not modify index
@@ -526,6 +558,50 @@ namespace cuw::mem {
 					break;
 				}
 			}
+		}
+
+		[[nodiscard]] smd_t* alloc_smd(void* data, std::size_t size) {
+			if (smd_t* smd = smd_entry.acquire(data, size)) {
+				return smd;
+			}
+
+			std::size_t pool_size = sysmem_pool_size;
+			void* pool_data = base_t::allocate(pool_size);
+			if (!pool_data) {
+				return nullptr;
+			}
+			smd_entry.create_pool(pool_data, pool_size);
+			return smd_entry.acquire(data, size);
+		}
+
+		void free_smd(smd_t* smd) {
+			smd_entry.release(smd);
+		}
+
+		[[nodiscard]] smd_t* alloc_memory(std::size_t size) {
+			size = align_value(size, page_size);
+
+			void* memory = base_t::allocate(size);
+			if (!memory) {
+				return nullptr;
+			}
+
+			smd_t* smd = alloc_smd(memory, size);
+			if (!smd) {
+				base_t::deallocate(memory);
+				return nullptr;
+			}
+				
+			smd_addr = trb::insert_lb(smd_addr, &smd->addr_index, smd_t::addr_ops_t{});
+			smd_size = trb::insert_lb(smd_size, &smd->size_index, smd_t::size_ops_t{});
+			return smd;
+		}
+
+		void free_memory(smd_t* smd) {
+			base_t::deallocate(smd->data, smd->size);
+			smd_addr = trb::remove(smd_addr, &smd->addr_index);
+			smd_size = trb::remove(smd_size, &smd->size_index);
+			free_smd(smd);
 		}
 
 	private:
@@ -564,28 +640,29 @@ namespace cuw::mem {
 			// we guarantee that we always have space for additional block pool
 			std::size_t size_ext = std::max(size, min_block_size + block_pool_size);
 
-			void* ptr = base_t::allocate(size_ext);
-			if (!ptr) {
-				ptr = base_t::allocate(size); // fallback
-				if (!ptr) {
+			smd_t* smd = alloc_memory(size_ext); 
+			if (!smd) {
+				smd = alloc_memory(size); // fallback
+				if (!smd) {
 					return nullptr;
 				} size_ext = size;
 			}
 
-			while (true) { // to avoid goto, executes 1 or 2 times at most (I COULD'VE USED LAMBDA)
-				void* rest_ptr = (char*)ptr + size;
-				std::size_t rest_size = size_ext - size;
-				if (rest_size == 0) {
-					return ptr;
-				} if (fbd_t* fbd = acquire_fbd(rest_ptr, rest_size)) {
-					insert_free_block(get_coalesce_info(rest_ptr, rest_size), fbd);
-					return ptr;
-				} else {
-					extend_fbd(ptr, block_pool_size); // cut from the beggining
-					ptr = (char*)ptr + block_pool_size;
-					size_ext -= block_pool_size;
-					continue; // one more time
-				}
+			void* ptr = smd->data;
+
+		one_more_time:
+			void* rest_ptr = (char*)ptr + size;
+			std::size_t rest_size = size_ext - size;
+			if (rest_size == 0) {
+				return ptr;
+			} if (fbd_t* fbd = acquire_fbd(rest_ptr, rest_size)) {
+				insert_free_block(get_coalesce_info(rest_ptr, rest_size), fbd);
+				return ptr;
+			} else {
+				extend_fbd(ptr, block_pool_size); // cut from the beginning
+				ptr = (char*)ptr + block_pool_size;
+				size_ext -= block_pool_size;
+				goto one_more_time;
 			}
 		}
 
@@ -602,17 +679,18 @@ namespace cuw::mem {
 		// as a fallback tries to allocate smaller memory region in case of failure
 		[[nodiscard]] bool try_extend_fbd() {
 			std::size_t size = block_pool_size;
-			std::size_t size_ext = std::max(size, min_block_size);
+			std::size_t size_ext = std::max(size, min_block_size + block_pool_size);
 			
-			void* ptr = base_t::allocate(size_ext);
-			if (!ptr) {
-				ptr = base_t::allocate(size); // fallback
-				if (!ptr) {
+			smd_t* smd = alloc_memory(size_ext);
+			if (!smd) {
+				smd = alloc_memory(size); // fallback
+				if (!smd) {
 					return false;
 				} size_ext = size;
 			}
 
-			extend_fbd(ptr, size); // cut from the beggining
+			void* ptr = smd->data;
+			extend_fbd(ptr, size); // cut from the beginning
 
 			void* rest_ptr = (char*)ptr + size;
 			std::size_t rest_size = size_ext - size;
@@ -649,7 +727,6 @@ namespace cuw::mem {
 		// unneccessary fbds for that
 		void deallocate(void* ptr, std::size_t size) {
 			size = align_value(size, page_size);
-
 			if (auto info = get_coalesce_info(ptr, size); info.requires_fbd_alloc()) {
 				if (fbd_t* fbd = try_alloc_fbd(ptr, size)) {
 					insert_free_block(get_coalesce_info(ptr, size), fbd); // info can expire
@@ -721,15 +798,23 @@ namespace cuw::mem {
 			return min_block_size;
 		}
 
+		// this function does not modify index
+		std::size_t get_sysmem_pool_size() const {
+			return sysmem_pool_size;
+		}
+
 	private:
 		fbd_entry_t fbd_entry{};
 		addr_index_t* fbd_addr{}; // free blocks stored by address
 		size_index_t* fbd_size{}; // free blocks stored by size
+
 		smd_entry_t smd_entry{};
 		addr_index_t* smd_addr{}; // system memory blocks stored by address
 		size_index_t* smd_size{}; // system memory blocks stored by size
+
 		std::size_t page_size{};
 		std::size_t block_pool_size{};
+		std::size_t sysmem_pool_size{};
 		std::size_t min_block_size{};
 	};
 }

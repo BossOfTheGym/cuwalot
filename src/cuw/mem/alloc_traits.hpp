@@ -64,6 +64,17 @@ namespace cuw::mem {
 		};
 
 		template<class alloc_traits_t, class = void>
+		struct alloc_merge_coef_t {
+			static constexpr std::size_t alloc_merge_coef = default_merge_coef;
+		};
+
+		template<class alloc_traits_t>
+		struct alloc_merge_coef_t<alloc_traits_t,
+			std::void_t<enable_option_t<std::size_t, decltype(alloc_traits_t::alloc_merge_coef)>>> {
+			static constexpr std::size_t alloc_merge_coef = alloc_traits_t::alloc_merge_coef;
+		};
+
+		template<class alloc_traits_t, class = void>
 		struct alloc_min_pool_power_t {
 			static constexpr attrs_t alloc_min_pool_power = default_min_pool_power;
 		};
@@ -279,6 +290,7 @@ namespace cuw::mem {
 		static constexpr std::size_t alloc_block_pool_size = impl::alloc_block_pool_size_t<traits_t>::alloc_block_pool_size;
 		static constexpr std::size_t alloc_sysmem_pool_size = impl::alloc_sysmem_pool_size_t<traits_t>::alloc_sysmem_pool_size;
 		static constexpr std::size_t alloc_min_block_size = impl::alloc_min_block_size_t<traits_t>::alloc_min_block_size;
+		static constexpr std::size_t alloc_merge_coef = impl::alloc_merge_coef_t<traits_t>::alloc_merge_coef;
 	};
 
 	template<class traits_t>

@@ -16,11 +16,8 @@ namespace cuw::mem {
 		} return {nullptr, -1};
 	}
 
-	// TODO: windows must die, fuck
-	// we cannot deallocate part of the region allocated previously via VirtualAlloc
-	// wellp, page_alloc_t now requires some rework...
 	int deallocate_sysmem(void* ptr, std::size_t size) {
 		VirtualFree(ptr, 0, MEM_RELEASE);
-		return {};
+		return 0;
 	}
 }
