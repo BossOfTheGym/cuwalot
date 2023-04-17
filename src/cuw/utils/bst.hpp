@@ -240,6 +240,51 @@ namespace cuw::bst {
 		}
 	}
 
+	// creates singly-linked list, left-pointer is next-pointer
+	template<class node_t>
+	struct head_tail_t {
+		void append(const head_tail_t& another) {
+			if (!another.head) {
+				return;
+			}
+			
+			if (head) {
+				tail->left = another.head;
+				tail = another.tail;
+			} else {
+				head = another.head;
+				tail = another.tail;
+			}
+		}
+
+		void append(node_t* node) {
+			assert(node);
+
+			if (head) {
+				tail->left = node;
+				tail = node;
+			} else {
+				head = node;
+				tail = node;
+			} node->left = nullptr;
+		}
+
+		node_t* head{};
+		node_t* tail{};
+	};
+
+	template<class node_t>
+	head_tail_t<node_t> flatten(node_t* root) {
+		head_tail_t head_tail{};
+		if (root) {
+			node_t* left = root->left;
+			node_t* right = root->right;
+			head_tail.append(flatten(left));
+			head_tail.append(root);
+			head_tail.append(flatten(right));
+		} return head_tail;
+	}
+
 	template<class __node_t>
 	class tree_iter_t {
 	public:
