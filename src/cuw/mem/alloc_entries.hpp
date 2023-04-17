@@ -7,10 +7,10 @@
 #include "alloc_wrappers.hpp"
 
 namespace cuw::mem {
-	template<auto check_policy = pool_checks_policy_t::Default>
-	class basic_pool_entry_t : protected alloc_descr_pool_cache_t<check_policy> {
+	template<class = void>
+	class basic_pool_entry_t : protected alloc_descr_pool_cache_t {
 	public:
-		using base_t = alloc_descr_pool_cache_t<check_policy>;
+		using base_t = alloc_descr_pool_cache_t;
 		using ad_t = alloc_descr_t;
 		using ad_addr_cache_t = alloc_descr_addr_cache_t;
 
@@ -112,10 +112,10 @@ namespace cuw::mem {
 		attrs_t alignment{};
 	};
 
-	template<auto check_policy = pool_checks_policy_t::Default>
-	class pool_entry_t : public basic_pool_entry_t<check_policy> {
+	template<class = void>
+	class pool_entry_t : public basic_pool_entry_t {
 	public:
-		using base_t = basic_pool_entry_t<check_policy>;
+		using base_t = basic_pool_entry_t;
 		using ad_t = alloc_descr_t;
 		using ad_addr_cache_t = alloc_descr_addr_cache_t;
 		using wrapper_t = basic_pool_wrapper_t;
@@ -142,10 +142,10 @@ namespace cuw::mem {
 	// so allocator can guarantee that alignment is also a valid memory
 	// 3) ... allocator returns valid memory chunk
 	// we can possibly change alignment of a raw
-	template<auto check_policy = raw_check_policy_t::Default>
-	class raw_entry_t : protected alloc_descr_raw_cache_t<check_policy> {
+	template<class = void>
+	class raw_entry_t : protected alloc_descr_raw_cache_t {
 	public:
-		using base_t = alloc_descr_raw_cache_t<check_policy>;
+		using base_t = alloc_descr_raw_cache_t;
 		using ad_t = alloc_descr_t;
 		using ad_addr_cache_t = alloc_descr_addr_cache_t;
 

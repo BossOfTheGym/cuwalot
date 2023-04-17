@@ -13,37 +13,38 @@ namespace cuw::mem {
 
 	// pool_chunk is power of two
 	// chunk_enum is logi(pool_chunk)
+	template<class = void>
 	class pool_ops_t : public alloc_descr_wrapper_t {
 	public:
 		using base_t = alloc_descr_wrapper_t;
 		using ad_t = alloc_descr_t;
 
-		inline pool_ops_t(ad_t* descr = nullptr, attrs_t _chunk_enum = chunk_size_empty, attrs_t _alignment = 0)
+		pool_ops_t(ad_t* descr = nullptr, attrs_t _chunk_enum = chunk_size_empty, attrs_t _alignment = 0)
 			: base_t(descr), chunk_enum{_chunk_enum} , alignment{_alignment} {}
 
-		inline attrs_t get_chunk_size() const {
+		attrs_t get_chunk_size() const {
 			return pool_chunk_size(chunk_enum);
 		}
 
-		inline attrs_t get_chunk_size_enum() const {
+		attrs_t get_chunk_size_enum() const {
 			return chunk_enum;
 		}
 
-		inline attrs_t get_alignment() const {
+		attrs_t get_alignment() const {
 			return alignment;
 		}
 
-		inline void* get_chunk_memory(attrs_t index) const {
+		void* get_chunk_memory(attrs_t index) const {
 			return (char*)base_t::get_data() + ((std::uintptr_t)index << chunk_enum);
 		}
 
-		inline attrs_t get_chunk_index(void* chunk) const {
+		attrs_t get_chunk_index(void* chunk) const {
 			assert(has_chunk(chunk));
 			auto diff = (std::uintptr_t)chunk - (std::uintptr_t)base_t::get_data();
 			return (attrs_t)(diff >> (std::uintptr_t)chunk_enum);
 		}
 
-		inline void* refine_chunk_memory(void* chunk) const {
+		void* refine_chunk_memory(void* chunk) const {
 			auto chunk_value = (std::uintptr_t)chunk;
 			auto data_value = (std::uintptr_t)base_t::get_data();
 			if (chunk_value < data_value) {
@@ -51,7 +52,7 @@ namespace cuw::mem {
 			} return (void*)(((chunk_value - data_value) & ~((std::uintptr_t)get_alignment() - 1)) + data_value);
 		}
 
-		inline bool has_chunk(void* addr) const {
+		bool has_chunk(void* addr) const {
 			auto addr_value = (std::uintptr_t)addr;
 			auto data_value = (std::uintptr_t)base_t::get_data();
 			if (addr_value < data_value) {
@@ -66,12 +67,13 @@ namespace cuw::mem {
 		attrs_t alignment{};
 	};
 
+	template<class = void>
 	class basic_pool_ops_t : public pool_ops_t {
 	public:
 		using base_t = pool_ops_t;
 		using base_t::base_t;
 		
-		[[nodiscard]] inline void* acquire_chunk() {
+		[[nodiscard]] void* acquire_chunk() {
 			if (attrs_t head = base_t::get_head(); head != alloc_descr_head_empty) {
 				void* chunk = base_t::get_chunk_memory(head);
 				base_t::set_head(((pool_hdr_t*)chunk)->next);
@@ -80,43 +82,44 @@ namespace cuw::mem {
 		}
 
 		// peeks next unused chunk
-		inline void* peek_chunk() const {
+		void* peek_chunk() const {
 			if (attrs_t head = base_t::get_head(); head != alloc_descr_head_empty) {
 				return base_t::get_chunk_memory(head);
 			} return nullptr;
 		}
 
-		inline void release_chunk(void* chunk) {
+		void release_chunk(void* chunk) {
 			assert(base_t::has_chunk(chunk));
 			((pool_hdr_t*)chunk)->next = base_t::get_head();
 			base_t::set_head(base_t::get_chunk_index(chunk));
 		}
 
-		[[nodiscard]] inline void* acquire_unused_chunk() {
+		[[nodiscard]] void* acquire_unused_chunk() {
 			if (base_t::has_capacity()) {
 				return base_t::get_chunk_memory(base_t::inc_used());
 			} return nullptr; // no more chunks
 		}
 	};
 
+	template<class = void>
 	class basic_pool_wrapper_t : public basic_pool_ops_t {
 	public:
 		using base_t = basic_pool_ops_t;
 		using base_t::base_t;
 
-		inline void* acquire_chunk() {
+		void* acquire_chunk() {
 			void* chunk = base_t::acquire_chunk();
 			if (chunk) {
 				base_t::inc_count();
 			} return chunk;
 		}
 
-		inline void release_chunk(void* chunk) {
+		void release_chunk(void* chunk) {
 			base_t::release_chunk(chunk);
 			base_t::dec_count();
 		}
 
-		inline void* acquire_unused_chunk() {
+		void* acquire_unused_chunk() {
 			void* chunk = base_t::acquire_unused_chunk();
 			if (chunk) {
 				base_t::inc_count();
@@ -126,25 +129,26 @@ namespace cuw::mem {
 
 	using pool_wrapper_t = basic_pool_wrapper_t;
 
+	template<class = void>
 	class raw_wrapper_t {
 	public:
 		using ad_t = alloc_descr_t;
 
-		inline raw_wrapper_t(ad_t* descr_) : descr{descr_} {}
+		raw_wrapper_t(ad_t* descr_) : descr{descr_} {}
 
-		inline bool has_addr(void* addr) const {
+		bool has_addr(void* addr) const {
 			return descr->has_addr(addr);
 		}
 
-		inline void* get_data() const {
+		void* get_data() const {
 			return descr->data;
 		}
 
-		inline std::size_t get_size() const {
+		std::size_t get_size() const {
 			return descr->size;
 		}
 
-		inline ad_t* get_descr() const {
+		ad_t* get_descr() const {
 			return descr;
 		}
 

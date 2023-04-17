@@ -14,20 +14,21 @@ namespace cuw::mem {
 	// count(16) : allocated blocks
 	// head(16) : index of the next allocated block
 	// reserved(4*64) : reserved, no use
+	template<class = void>
 	struct alignas(block_align) block_pool_t {
 		using bp_t = block_pool_t;
 		using bpl_t = block_pool_list_t;
 
-		inline static bp_t* list_entry_to_block(bpl_t* list) {
+		static bp_t* list_entry_to_block(bpl_t* list) {
 			return base_to_obj(list, bp_t, list_entry);
 		}
 
 		// offset is zero-based and means offset from the first possible allocated block (not primary block)
-		inline static bp_t* primary_block(void* block, attrs_t offset) {
+		static bp_t* primary_block(void* block, attrs_t offset) {
 			return transform_ptr<bp_t>(block, -(std::ptrdiff_t)((offset + 1) * block_align));
 		}
 
-		inline static attrs_t primary_offset(bp_t* primary_block, void* block) {
+		static attrs_t primary_offset(bp_t* primary_block, void* block) {
 			auto primary_block_value = (std::uintptr_t)primary_block;
 			auto block_value = (std::uintptr_t)block;
 			if (block_value >= primary_block_value) {
@@ -56,21 +57,22 @@ namespace cuw::mem {
 		attrs_t index{};
 	};
 
+	template<class = void>
 	class block_pool_wrapper_t {
 	public:
 		using bp_t = block_pool_t;
 
-		inline block_pool_wrapper_t(bp_t* _pool) : pool{_pool} {}
+		block_pool_wrapper_t(bp_t* _pool) : pool{_pool} {}
 		
 	private:
 		// index start from 0 from the start of the data segment (not counting first block)
-		inline void* get_block(attrs_t index) const {
+		void* get_block(attrs_t index) const {
 			return (char*)get_data() + index * block_align;
 		}
 
 	public:
 		// index is zero-based, zero block is the first block after pool block
-		[[nodiscard]] inline block_info_t acquire() {
+		[[nodiscard]] block_info_t acquire() {
 			attrs_t index = 0;
 			void* block = nullptr;
 			if (pool->head != block_pool_head_empty) {
@@ -88,7 +90,7 @@ namespace cuw::mem {
 		}
 
 		// index is zero-based, zero block is the first block after pool block
-		inline void release(void* block, attrs_t index) {
+		void release(void* block, attrs_t index) {
 			assert(is_aligned(block, block_align));
 			assert(index < pool->capacity);
 			((pool_hdr_t*)block)->next = pool->head;
@@ -96,35 +98,35 @@ namespace cuw::mem {
 			pool->count--;
 		}
 
-		inline void* get_data() const {
+		void* get_data() const {
 			return (char*)pool + block_align;
 		}
 
-		inline attrs_t get_size() const {
+		attrs_t get_size() const {
 			return pool->size;
 		}
 
-		inline bool empty() const {
+		bool empty() const {
 			return pool->count == 0;
 		} 
 
-		inline bool full() const {
+		bool full() const {
 			return pool->count == pool->capacity;
 		}
 
-		inline attrs_t get_capacity() const {
+		attrs_t get_capacity() const {
 			return pool->capacity;
 		}
 
-		inline attrs_t get_used() const {
+		attrs_t get_used() const {
 			return pool->used;
 		}
 
-		inline attrs_t get_count() const {
+		attrs_t get_count() const {
 			return pool->count;
 		}
 
-		inline bp_t* get_pool() const {
+		bp_t* get_pool() const {
 			return pool;
 		}
 
@@ -132,6 +134,7 @@ namespace cuw::mem {
 		bp_t* pool{};
 	};
 
+	template<class = void>
 	class block_pool_list_cache_t : public list_cache_t<block_pool_list_t> {
 	public:
 		using bp_t = block_pool_t;
@@ -166,51 +169,52 @@ namespace cuw::mem {
 		}
 	};
 
+	template<class = void>
 	class block_pool_cache_t {
 	public:
 		using bp_t = block_pool_t;
 		using bpl_t = block_pool_list_t;
 		using bpl_cache_t = block_pool_list_cache_t;
 
-		inline void insert_full(bp_t* pool) {
+		void insert_full(bp_t* pool) {
 			full_entries.insert(pool);
 		}
 
-		inline void reinsert_full(bp_t* pool) {
+		void reinsert_full(bp_t* pool) {
 			full_entries.reinsert(pool);
 		}
 
-		inline void insert_free(bp_t* pool) {
+		void insert_free(bp_t* pool) {
 			free_entries.insert(pool);
 		}
 
-		inline void reinsert_free(bp_t* pool) {
+		void reinsert_free(bp_t* pool) {
 			free_entries.reinsert(pool);
 		}
 
-		inline void insert_empty(bp_t* pool) {
+		void insert_empty(bp_t* pool) {
 			empty_entries.insert(pool);
 		}
 
-		inline void reinsert_empty(bp_t* pool) {
+		void reinsert_empty(bp_t* pool) {
 			empty_entries.reinsert(pool);
 		}
 
-		inline bp_t* peek_empty() const {
+		bp_t* peek_empty() const {
 			return empty_entries.peek();
 		}
 
 
-		inline void insert(bp_t* pool) {
+		void insert(bp_t* pool) {
 			insert_empty(pool);
 		}
 
-		inline void erase(bp_t* pool) {
+		void erase(bp_t* pool) {
 			assert(pool);
 			list::erase(&pool->list_entry);
 		}
 
-		inline bp_t* peek() const {
+		bp_t* peek() const {
 			if (bp_t* bp = free_entries.peek()) {
 				return bp;
 			} if (bp_t* bp = empty_entries.peek()) {
@@ -218,7 +222,7 @@ namespace cuw::mem {
 			} return nullptr;
 		}
 
-		inline void adopt(block_pool_cache_t& another) {
+		void adopt(block_pool_cache_t& another) {
 			full_entries.adopt(another.full_entries);
 			free_entries.adopt(another.free_entries);
 			empty_entries.adopt(another.empty_entries);
@@ -244,12 +248,13 @@ namespace cuw::mem {
 		bpl_cache_t empty_entries{};
 	};
 
+	template<class = void>
 	class block_pool_entry_t : protected block_pool_cache_t {
 	public:
 		using bp_t = block_pool_t;
 		using base_t = block_pool_cache_t;
 
-		inline void create_pool(void* mem, std::size_t size) {
+		void create_pool(void* mem, std::size_t size) {
 			assert(mem);
 			assert(size >= 2 * block_align);
 			assert(is_aligned(mem, block_align));
@@ -260,7 +265,7 @@ namespace cuw::mem {
 		}
 
 		// returns block_mem, block_offset
-		[[nodiscard]] inline block_info_t acquire() {
+		[[nodiscard]] block_info_t acquire() {
 			bp_t* bp = base_t::peek();
 			if (!bp) {
 				return {nullptr, block_pool_head_empty};
@@ -274,7 +279,7 @@ namespace cuw::mem {
 		}
 
 		// returns pool descriptor(block_pool) when it becomes empty
-		inline bp_t* release(void* block_mem, attrs_t block_offset) {
+		bp_t* release(void* block_mem, attrs_t block_offset) {
 			bp_t* primary_block = bp_t::primary_block(block_mem, block_offset);
 
 			block_pool_wrapper_t pool{primary_block};
@@ -295,7 +300,7 @@ namespace cuw::mem {
 			func(bp->get_data(), bp->get_size());
 		}
 
-		inline void adopt(block_pool_entry_t& another) {
+		void adopt(block_pool_entry_t& another) {
 			base_t::adopt(another);
 		}
 
