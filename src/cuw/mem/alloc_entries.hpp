@@ -7,7 +7,6 @@
 #include "alloc_wrappers.hpp"
 
 namespace cuw::mem {
-	template<class = void>
 	class basic_pool_entry_t : protected alloc_descr_pool_cache_t {
 	public:
 		using base_t = alloc_descr_pool_cache_t;
@@ -22,8 +21,8 @@ namespace cuw::mem {
 			return base_t::get_chunk_size();
 		}
 
-		attrs_t get_chunk_enum() const {
-			return base_t::get_chunk_enum();
+		attrs_t get_chunk_size_enum() const {
+			return base_t::get_chunk_size_enum();
 		}
 
 		// size, capacity
@@ -112,7 +111,6 @@ namespace cuw::mem {
 		attrs_t alignment{};
 	};
 
-	template<class = void>
 	class pool_entry_t : public basic_pool_entry_t {
 	public:
 		using base_t = basic_pool_entry_t;
@@ -142,7 +140,6 @@ namespace cuw::mem {
 	// so allocator can guarantee that alignment is also a valid memory
 	// 3) ... allocator returns valid memory chunk
 	// we can possibly change alignment of a raw
-	template<class = void>
 	class raw_entry_t : protected alloc_descr_raw_cache_t {
 	public:
 		using base_t = alloc_descr_raw_cache_t;
@@ -156,8 +153,7 @@ namespace cuw::mem {
 		}
 
 		// NOTE: data must be aligned beforehand
-		void create(ad_addr_cache_t& addr_cache,
-				void* block, attrs_t offset, attrs_t size, attrs_t alignment, void* data) {
+		void create(ad_addr_cache_t& addr_cache, void* block, attrs_t offset, attrs_t size, attrs_t alignment, void* data) {
 			assert(block);
 			assert(data);
 			assert(is_aligned(data, alignment));

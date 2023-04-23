@@ -3,9 +3,7 @@ Tree-based memory allocator. Utilizes red-black trees. The best allocator in the
 
 # TODO
 **rework**
-- page_alloc: add info blocks that will store info about initial allocated ranges
 - rework page_alloc tests
-- merge function in addr_cache and page_alloc
 
 **testing**
 - nothing to do

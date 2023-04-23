@@ -25,7 +25,6 @@ namespace cuw::mem {
 	// count(14): how many chunks were allocated(are in use)
 	// head(14): pointer to the next free chunk
 	// data: pointer to start of the pool
-	template<class = void>
 	struct alignas(block_align) alloc_descr_t {
 		using ad_t = alloc_descr_t;
 
@@ -122,9 +121,8 @@ namespace cuw::mem {
 		void* data;
 	};
 
-	static_assert(sizeof(alloc_descr_t) == block_align);
+	static_assert(do_fits_block<alloc_descr_t>);
 
-	template<class = void>
 	class alloc_descr_wrapper_t {
 	public:
 		using ad_t = alloc_descr_t;
@@ -207,7 +205,6 @@ namespace cuw::mem {
 
 	using basic_alloc_descr_cache_t = list_cache_t<alloc_descr_list_t>;
 
-	template<class = void>
 	class alloc_descr_cache_t : protected basic_alloc_descr_cache_t {
 	public:
 		using ad_t = alloc_descr_t;
@@ -266,7 +263,6 @@ namespace cuw::mem {
 		}
 	};
 
-	template<class = void>
 	class alloc_descr_addr_cache_t {
 	public:
 		using ad_t = alloc_descr_t;
@@ -314,7 +310,6 @@ namespace cuw::mem {
 		attrs_t capacity{};
 	};
 
-	template<class = void>
 	class pool_entry_ops_t {
 	public:
 		pool_entry_ops_t(attrs_t _chunk_enum = chunk_size_empty) : chunk_enum{_chunk_enum} {}
@@ -350,7 +345,6 @@ namespace cuw::mem {
 	// type: block_type_t value, must be pool-like
 	// free_cache: list of description blocks (pools) that have free chunks
 	// full_cache: list of description blocks (pools) that have no free chunks
-	template<class = void>
 	class alloc_descr_pool_cache_t : public pool_entry_ops_t {
 	public:
 		using ops_t = pool_entry_ops_t;
@@ -453,7 +447,6 @@ namespace cuw::mem {
 	};
 
 
-	template<class = void>
 	class alloc_descr_raw_cache_t : public alloc_descr_cache_t {
 	public:
 		using ad_t = alloc_descr_t;

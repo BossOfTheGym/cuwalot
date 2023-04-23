@@ -12,7 +12,6 @@ namespace cuw::mem {
 	// offset(16): offset from prime block
 	// size(48): size of the block in bytes (page_size aligned)
 	// data: pointer to data
-	template<class = void>
 	struct alignas(block_align) free_block_descr_t {
 		using fbd_t = free_block_descr_t;
 
@@ -95,9 +94,8 @@ namespace cuw::mem {
 		void* data;
 	};
 
-	static_assert(sizeof(free_block_descr_t) == block_align);
+	static_assert(do_fits_block<free_block_descr_t>);
 
-	template<class = void>
 	struct alignas(block_align) sysmem_descr_t {
 		using smd_t = sysmem_descr_t;
 
@@ -123,6 +121,10 @@ namespace cuw::mem {
 			}
 		};
 
+		std::size_t get_size() const {
+			return size;
+		}
+
 		void* get_start() const {
 			return data;
 		}
@@ -137,15 +139,15 @@ namespace cuw::mem {
 		void* data;
 	};
 
-	static_assert(sizeof(sysmem_descr_t) == block_align);
+	static_assert(do_fits_block<sysmem_descr_t>);
 
-	template<class decsr_t>
+	template<class descr_t>
 	class descr_entry_t : public block_pool_entry_t {
 	public:
 		using bp_t = block_pool_t;
 		using base_t = block_pool_entry_t;
 
-		static_assert(std::is_standard_layout_v<block_t> && std::is_trivial_v<block_t>);
+		static_assert(std::is_aggregate_v<descr_t>);
 
 		descr_t* acquire(void* data, std::size_t size) {
 			if (auto [ptr, offset] = base_t::acquire(); ptr) {
@@ -175,12 +177,6 @@ namespace cuw::mem {
 
 	using free_block_descr_entry_t = descr_entry_t<free_block_descr_t>;
 	using sysmem_descr_entry_t = descr_entry_t<sysmem_descr_t>;
-
-	// TODO : rework so it can work on Windows
-	// TODO : align size: block_pool_size to page_size, so, align whatever you see to page_size
-	// yeah, it will break some tests, jeez
-	// TODO : merge strategies
-	// TODO : merge threshold
 
 	// all allocations will be multiple of page_size
 	// size is now size in bytes
@@ -229,7 +225,7 @@ namespace cuw::mem {
 			fbd_entry.adopt(another.fbd_entry); // we now posess all fbd entries, so we can free them from this allocator
 			bst::traverse_inorder(another.fbd_addr, [&] (addr_index_t* node) {
 				fbd_t* fbd = fbd_t::addr_index_to_descr(node);
-				insert_free_block(get_coalesce_info(fbd->data, fbd->size));
+				insert_free_block(get_coalesce_info(fbd->data, fbd->size), fbd);
 			});
 			another.fbd_addr = nullptr;
 			another.fbd_size = nullptr;
@@ -392,7 +388,10 @@ namespace cuw::mem {
 			});
 			smd_addr = nullptr;
 			smd_size = nullptr;
-			smd_entry.release_all([&] (void* block, std::size_t size) { base_t::deallocate(block, size); });
+			smd_entry.release_all([&] (void* block, std::size_t size) {
+				base_t::deallocate(block, size);
+				return true;
+			});
 		}
 
 		// this function does not modify index
@@ -588,7 +587,7 @@ namespace cuw::mem {
 
 			smd_t* smd = alloc_smd(memory, size);
 			if (!smd) {
-				base_t::deallocate(memory);
+				base_t::deallocate(memory, size);
 				return nullptr;
 			}
 				

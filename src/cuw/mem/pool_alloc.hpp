@@ -173,8 +173,8 @@ namespace cuw::mem {
 		static_assert(has_sysmem_alloc_tag_v<base_t>);
 
 	private:
-		using pool_t = pool_entry_t<>;
-		using raw_bin_t = raw_entry_t<>;
+		using pool_t = pool_entry_t;
+		using raw_bin_t = raw_entry_t;
 
 		using pools_t = impl::pools_t<pool_t, base_t::alloc_pool_first_chunk, base_t::alloc_pool_last_chunk>;
 		using raw_bins_t = impl::raw_bins_t<raw_bin_t, base_t::alloc_raw_base_size, base_t::alloc_total_raw_bins>;
@@ -249,7 +249,7 @@ namespace cuw::mem {
 
 	private:
 		// returns (memory for block description, offset from primary block)
-		[[nodiscard]] std::tuple<void*, attrs_t> alloc_descr() {
+		[[nodiscard]] block_info_t alloc_descr() {
 			if (auto [ptr, offset] = ad_entry.acquire(); ptr) {
 				return {ptr, offset};
 			}

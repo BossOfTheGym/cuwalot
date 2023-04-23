@@ -275,7 +275,7 @@ namespace cuw::bst {
 
 	template<class node_t>
 	head_tail_t<node_t> flatten(node_t* root) {
-		head_tail_t head_tail{};
+		head_tail_t<node_t> head_tail{};
 		if (root) {
 			node_t* left = root->left;
 			node_t* right = root->right;

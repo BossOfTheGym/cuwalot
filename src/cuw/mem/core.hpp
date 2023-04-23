@@ -37,6 +37,7 @@ namespace cuw::mem {
 
 	inline constexpr std::size_t block_align_pow = 6;
 	inline constexpr std::size_t block_align = 64;
+	inline constexpr std::size_t block_size = 64;
 
 	inline constexpr bool default_use_resolved_page_size = false;
 	inline constexpr std::size_t default_page_size = 1 << 12; // 4K
@@ -75,6 +76,9 @@ namespace cuw::mem {
 	using size_index_t = void_node_t<>;
 
 	using list_entry_t = list::entry_t;
+
+	template<class type_t>
+	inline constexpr bool do_fits_block = (sizeof(type_t) == block_size);
 
 	enum block_type_t : attrs_t {
 		Pool = 0, // pool of chunks

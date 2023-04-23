@@ -14,7 +14,6 @@ namespace cuw::mem {
 	// count(16) : allocated blocks
 	// head(16) : index of the next allocated block
 	// reserved(4*64) : reserved, no use
-	template<class = void>
 	struct alignas(block_align) block_pool_t {
 		using bp_t = block_pool_t;
 		using bpl_t = block_pool_list_t;
@@ -50,14 +49,13 @@ namespace cuw::mem {
 		attrs_t reserved[4];
 	};
 
-	static_assert(sizeof(block_pool_t) == block_align);
+	static_assert(do_fits_block<block_pool_t>);
 
 	struct block_info_t {
 		void* addr{};
 		attrs_t index{};
 	};
 
-	template<class = void>
 	class block_pool_wrapper_t {
 	public:
 		using bp_t = block_pool_t;
@@ -134,7 +132,6 @@ namespace cuw::mem {
 		bp_t* pool{};
 	};
 
-	template<class = void>
 	class block_pool_list_cache_t : public list_cache_t<block_pool_list_t> {
 	public:
 		using bp_t = block_pool_t;
@@ -169,7 +166,6 @@ namespace cuw::mem {
 		}
 	};
 
-	template<class = void>
 	class block_pool_cache_t {
 	public:
 		using bp_t = block_pool_t;
@@ -248,7 +244,6 @@ namespace cuw::mem {
 		bpl_cache_t empty_entries{};
 	};
 
-	template<class = void>
 	class block_pool_entry_t : protected block_pool_cache_t {
 	public:
 		using bp_t = block_pool_t;

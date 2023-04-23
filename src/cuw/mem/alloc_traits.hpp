@@ -41,7 +41,7 @@ namespace cuw::mem {
 
 		template<class alloc_traits_t, class = void>
 		struct alloc_sysmem_pool_size_t {
-			static constexpr std::size_t alloc_block_pool_size = default_block_pool_size;
+			static constexpr std::size_t alloc_sysmem_pool_size = default_block_pool_size;
 		};
 
 		template<class alloc_traits_t>

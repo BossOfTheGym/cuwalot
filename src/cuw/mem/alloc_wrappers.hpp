@@ -13,7 +13,6 @@ namespace cuw::mem {
 
 	// pool_chunk is power of two
 	// chunk_enum is logi(pool_chunk)
-	template<class = void>
 	class pool_ops_t : public alloc_descr_wrapper_t {
 	public:
 		using base_t = alloc_descr_wrapper_t;
@@ -67,7 +66,6 @@ namespace cuw::mem {
 		attrs_t alignment{};
 	};
 
-	template<class = void>
 	class basic_pool_ops_t : public pool_ops_t {
 	public:
 		using base_t = pool_ops_t;
@@ -101,7 +99,6 @@ namespace cuw::mem {
 		}
 	};
 
-	template<class = void>
 	class basic_pool_wrapper_t : public basic_pool_ops_t {
 	public:
 		using base_t = basic_pool_ops_t;
@@ -129,7 +126,6 @@ namespace cuw::mem {
 
 	using pool_wrapper_t = basic_pool_wrapper_t;
 
-	template<class = void>
 	class raw_wrapper_t {
 	public:
 		using ad_t = alloc_descr_t;
