@@ -7,7 +7,7 @@ namespace cuw::mem {
 	value_status_t<sysmem_info_t, int> get_sysmem_info() {
 		SYSTEM_INFO info{};
 		GetNativeSystemInfo(&info);
-		return {{info.dwPageSize}, 0};
+		return {{(int)info.dwPageSize}, 0};
 	}
 
 	value_status_t<void*, int> allocate_sysmem(std::size_t size) {
