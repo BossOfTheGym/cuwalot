@@ -580,14 +580,14 @@ namespace cuw::mem {
 		[[nodiscard]] smd_t* alloc_memory(std::size_t size) {
 			size = align_value(size, page_size);
 
-			void* memory = base_t::allocate(size);
-			if (!memory) {
+			smd_t* smd = alloc_smd(nullptr, size);
+			if (!smd) {
 				return nullptr;
 			}
 
-			smd_t* smd = alloc_smd(memory, size);
-			if (!smd) {
-				base_t::deallocate(memory, size);
+			smd->data = base_t::allocate(size);
+			if (!smd->data) {
+				free_smd(smd);
 				return nullptr;
 			}
 				

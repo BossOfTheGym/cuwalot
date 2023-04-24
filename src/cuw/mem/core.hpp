@@ -43,7 +43,7 @@ namespace cuw::mem {
 	inline constexpr std::size_t default_page_size = 1 << 12; // 4K
 	inline constexpr std::size_t default_block_pool_size = 1 << 14; // 16K
 	inline constexpr std::size_t default_sysmem_pool_size = 1 << 12; // 4K
-	inline constexpr std::size_t default_min_block_size = (std::size_t)1 << 24; // 16
+	inline constexpr std::size_t default_min_block_size = (std::size_t)1 << 20; // 1M
 	inline constexpr std::size_t default_merge_coef = 4;
 
 	inline constexpr attrs_t default_min_pool_power = 15; // 32K
