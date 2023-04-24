@@ -47,7 +47,7 @@ namespace cuw::mem {
 	inline constexpr std::size_t default_merge_coef = 4;
 
 	inline constexpr attrs_t default_min_pool_power = 15; // 32K
-	inline constexpr attrs_t default_max_pool_power = 22; // 4M
+	inline constexpr attrs_t default_max_pool_power = 20; // 1M
 	inline constexpr attrs_t default_min_pool_size = (attrs_t)1 << default_min_pool_power; 
 	inline constexpr attrs_t default_max_pool_size = (attrs_t)1 << default_max_pool_power;
 
