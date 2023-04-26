@@ -102,7 +102,7 @@ namespace {
 	};
 
 	std::ostream& operator << (std::ostream& os, const print_range_t& print) {
-		return os << "[" << pretty(print.ptr) << ":" << print.size << "]";
+		return os << "[" << pretty(print.ptr) << "-" << pretty(advance_ptr(print.ptr, print.size)) << ":" << print.size << "]";
 	}
 
 	struct print_ad_t {

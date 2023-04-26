@@ -269,6 +269,16 @@ namespace cuw::bst {
 			} node->left = nullptr;
 		}
 
+		template<class func_t>
+		void traverse(func_t func) {
+			node_t* curr = head;
+			while (curr) {
+				node_t* next = curr->left;
+				func(curr);
+				curr = next;
+			}
+		}
+
 		node_t* head{};
 		node_t* tail{};
 	};

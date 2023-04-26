@@ -5,6 +5,10 @@
 #include <cassert>
 
 namespace cuw {
+	inline void* advance_ptr(void* ptr, std::ptrdiff_t diff) {
+		return (char*)ptr + diff;
+	}
+
 	template<class dst_type_t, class src_type_t>
 	dst_type_t* transform_ptr(src_type_t* ptr, std::ptrdiff_t diff) {
 		return std::launder((dst_type_t*)((char*)(ptr) + diff));
