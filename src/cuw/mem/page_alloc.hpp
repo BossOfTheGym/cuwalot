@@ -28,37 +28,42 @@ namespace cuw::mem {
 		}
 
 		static fbd_t* addr_index_to_descr(addr_index_t* ptr) {
-			return base_to_obj(ptr, fbd_t, addr_index); // OOP is for suckers
+			return ptr ? base_to_obj(ptr, fbd_t, addr_index) : nullptr; // OOP is for suckers
 		}
 
 		static fbd_t* size_index_to_descr(size_index_t* ptr) {
-			return base_to_obj(ptr, fbd_t, size_index); // OOP is for suckers
+			return ptr ? base_to_obj(ptr, fbd_t, size_index) : nullptr; // OOP is for suckers
 		}
 
-		struct addr_ops_t : trb::implicit_key_t<addr_index_t> {
-			// order blocks by block start
+		struct addr_index_search_t : trb::implicit_key_t<addr_index_t> {
+			bool compare(addr_index_t* node, void* start) const {
+				auto block_start = (std::uintptr_t)addr_index_to_descr(node)->get_start();
+				auto start_value = (std::uintptr_t)start;
+				return block_start < start_value;
+			}
+
 			bool compare(addr_index_t* node1, addr_index_t* node2) const {
-				auto addr1 = (std::uintptr_t)addr_index_to_descr(node1)->get_start();
-				auto addr2 = (std::uintptr_t)addr_index_to_descr(node2)->get_start();
-				return addr1 < addr2; // non-intersecting ranges
+				return compare(node1, addr_index_to_descr(node2)->get_start());
 			}
+		};		
 
-			// search first block containing ptr (upper_bound search)
-			bool compare(addr_index_t* node, void* ptr) const {
-				auto ptr_value = (std::uintptr_t)ptr;
-				return ptr_value >= (std::uintptr_t)addr_index_to_descr(node)->get_end();
-			}
-		};
-
-		struct size_ops_t : trb::implicit_key_t<size_index_t> {
-			// order block by block size
-			bool compare(size_index_t* node1, size_index_t* node2) const {
-				return size_index_to_descr(node1)->size < size_index_to_descr(node2)->size;
-			}
-
+		struct size_index_search_t : trb::implicit_key_t<size_index_t> {
 			// search first block with size greater than or equal to size
 			bool compare(size_index_t* node, std::size_t size) const {
 				return size_index_to_descr(node)->size < size;
+			}
+
+			bool compare(size_index_t* node1, size_index_t* node2) const {
+				return compare(node1, size_index_to_descr(node2)->size);
+			}
+		};
+
+		// for reversed search
+		struct previous_block_search_t : trb::implicit_key_t<addr_index_t> {
+			bool compare(addr_index_t* node, void* ptr) const {
+				auto block_end = (std::uintptr_t)addr_index_to_descr(node)->get_end();
+				auto ptr_value = (std::uintptr_t)ptr;
+				return block_end > ptr_value;
 			}
 		};
 
@@ -100,25 +105,28 @@ namespace cuw::mem {
 	struct alignas(block_align) sysmem_descr_t {
 		using smd_t = sysmem_descr_t;
 
-		static smd_t* addr_index_to_descr(addr_index_t* index) {
-			return base_to_obj(index, smd_t, addr_index);
+		static smd_t* addr_index_to_descr(addr_index_t* ptr) {
+			return ptr ? base_to_obj(ptr, smd_t, addr_index) : nullptr;
 		}
 
-		static smd_t* size_index_to_descr(size_index_t* index) {
-			return base_to_obj(index, smd_t, addr_index);
-		}
+		struct addr_index_search_t : trb::implicit_key_t<addr_index_t> {
+			bool compare(addr_index_t* node, void* start) const {
+				auto block_start = (std::uintptr_t)addr_index_to_descr(node)->get_start();
+				auto start_value = (std::uintptr_t)start;
+				return block_start < start_value;
+			}
 
-		struct addr_ops_t : trb::implicit_key_t<addr_index_t> {
 			bool compare(addr_index_t* node1, addr_index_t* node2) const {
-				auto data1 = (std::uintptr_t)addr_index_to_descr(node1)->get_start();
-				auto data2 = (std::uintptr_t)addr_index_to_descr(node2)->get_start();
-				return data1 < data2;
+				return compare(node1, addr_index_to_descr(node2)->get_start());
 			}
 		};
 
-		struct size_ops_t : trb::implicit_key_t<size_index_t> {
-			bool compare(size_index_t* node1, size_index_t* node2) const {
-				return size_index_to_descr(node1)->size < size_index_to_descr(node2)->size;
+		struct containing_block_search_t : trb::implicit_key_t<addr_index_t> {
+			// the result of the search must be checked that it contains searched pointer
+			bool compare(addr_index_t* node, void* ptr) {
+				auto block_end = (std::uintptr_t)addr_index_to_descr(node)->get_end();
+				auto ptr_value = (std::uintptr_t)ptr;
+				return ptr_value >= block_end;
 			}
 		};
 
@@ -135,15 +143,23 @@ namespace cuw::mem {
 		}
 
 		void allocate(std::size_t size) {
-			memory_used += size;
+			allocated += size;
 		}
 
 		void deallocate(std::size_t size) {
-			memory_used -= size;
+			allocated -= size;
+		}
+
+		bool is_full() const {
+			return allocated == size;
+		}
+
+		bool is_free() const {
+			return allocated == 0;
 		}
 
 		addr_index_t addr_index;
-		attrs_t :16, memory_used:48; 
+		attrs_t :16, allocated:48; 
 		attrs_t offset:16, size:48;
 		void* data;
 	};
@@ -299,10 +315,10 @@ namespace cuw::mem {
 			// rebuilding indices
 			merged.traverse([&] (addr_index_t* node) {
 				fbd_t* fbd = fbd_t::addr_index_to_descr(node);
-				fbd_size = trb::insert_lb(fbd_size, &fbd->size_index, fbd_t::size_ops_t{});
+				fbd_size = trb::insert_lb(fbd_size, &fbd->size_index, fbd_t::size_index_search_t{});
 			});
 			merged.traverse([&] (addr_index_t* node) {
-				fbd_addr = trb::insert_lb(fbd_addr, node, fbd_t::addr_ops_t{});
+				fbd_addr = trb::insert_lb(fbd_addr, node, fbd_t::addr_index_search_t{});
 			});
 			another.fbd_addr = nullptr;
 			another.fbd_size = nullptr;
@@ -328,7 +344,7 @@ namespace cuw::mem {
 			}
 
 			bst::traverse_inorder(merge_addr_from, [&] (addr_index_t* node) {
-				merge_addr_into = trb::insert_lb(merge_addr_into, node, smd_t::addr_ops_t{});
+				merge_addr_into = trb::insert_lb(merge_addr_into, node, smd_t::addr_index_search_t{});
 			});
 
 			smd_entry.adopt(another.smd_entry);
@@ -337,7 +353,6 @@ namespace cuw::mem {
 		}
 
 	public:
-		// this function modifies index
 		void adopt(page_alloc_t& another) {
 			if (this == &another) {
 				return;
@@ -347,17 +362,15 @@ namespace cuw::mem {
 			merge_smds(another);
 		}
 
-		// this function does not modify index
 		// mostly for debugging purpose
 		void release_mem() {
 			fbd_addr = nullptr;
 			fbd_size = nullptr;
 			fbd_entry.release_all([&] (void* block, std::size_t size) { return true; });
 
-			bst::traverse_inorder(smd_addr, [&] (size_index_t* node) {
-				smd_t* smd = smd_t::size_index_to_descr(node);
+			bst::traverse_inorder(smd_addr, [&] (addr_index_t* node) {
+				smd_t* smd = smd_t::addr_index_to_descr(node);
 				base_t::deallocate(smd->get_start(), smd->get_size());
-				// we don't need to deallocate them properly
 			});
 			smd_addr = nullptr;
 			smd_entry.release_all([&] (void* block, std::size_t size) {
@@ -367,7 +380,6 @@ namespace cuw::mem {
 		}
 
 	private:
-		// this function does not modify index
 		[[nodiscard]] smd_t* alloc_smd(void* data, std::size_t size) {
 			if (smd_t* smd = smd_entry.acquire(data, size)) {
 				return smd;
@@ -382,7 +394,6 @@ namespace cuw::mem {
 			return smd_entry.acquire(data, size);
 		}
 
-		// this function does not modify index
 		void free_smd(smd_t* smd) {
 			if (bp_t* bp = smd_entry.release(smd)) {
 				smd_entry.finish_release(bp, [&] (void* data, std::size_t size) {
@@ -392,12 +403,10 @@ namespace cuw::mem {
 		}
 
 	private:
-		// this function does not modify index
 		[[nodiscard]] fbd_t* try_alloc_fbd(void* data, std::size_t size) {
 			return fbd_entry.acquire(data, size);
 		}
 
-		// this function does not modify index
 		void extend_fbd() {
 			std::size_t pool_size = block_pool_size;
 			void* pool_data = base_t::allocate(pool_size);
@@ -406,7 +415,6 @@ namespace cuw::mem {
 			}
 		}
 
-		// this function does not modify index
 		[[nodiscard]] fbd_t* alloc_fbd(void* data, std::size_t size) {
 			if (fbd_t* fbd = try_alloc_fbd(data, size)) {
 				return fbd;
@@ -415,7 +423,6 @@ namespace cuw::mem {
 			} return nullptr;
 		}
 
-		// this function does not modify index
 		void free_fbd(fbd_t* fbd) {
 			if (bp_t* bp = fbd_entry.release(fbd)) {
 				fbd_entry.finish_release(bp, [&] (void* ptr, std::size_t size) {
@@ -424,6 +431,37 @@ namespace cuw::mem {
 			}
 		}
 
+	private:
+		void* shrink_fbd_left(fbd_t* fbd, std::size_t size) {
+			assert(size);
+			assert(fbd->size >= size);
+
+			void* ptr = fbd->get_start();
+			fbd_size = trb::remove(fbd_size, &fbd->size_index);
+			if (fbd->size != size) { // update block size by reinserting it into the free list
+				fbd->shrink_left(size);
+				fbd_size = trb::insert_lb(fbd_size, &fbd->size_index, fbd_t::size_index_search_t{});
+			} else { // size will be zero, completely remove it from the free list
+				fbd_addr = trb::remove(fbd_addr, &fbd->addr_index);
+				free_fbd(fbd);
+			} return ptr;
+		}
+
+		void* shrink_fbd_right(fbd_t* fbd, std::size_t size) {
+			assert(size);
+			assert(fbd->size >= size);
+
+			void* ptr = advance_ptr(fbd->get_start(), fbd->size - size);
+			fbd_size = trb::remove(fbd_size, &fbd->size_index);
+			if (fbd->size != size) { // update block size by reinserting it into the free list
+				fbd->shrink_right(size);
+				fbd_size = trb::insert_lb(fbd_size, &fbd->size_index, fbd_t::size_index_search_t{});
+			} else { // size will be zero, completely remove it from the free list
+				fbd_addr = trb::remove(fbd_addr, &fbd->addr_index);
+				free_fbd(fbd);
+			} return ptr;
+		}
+		
 	private:
 		struct coalesce_info_t {
 			bool requires_fbd_alloc() const {
@@ -437,7 +475,6 @@ namespace cuw::mem {
 			bool consumes_right{};
 		};
 
-		// this function does not modify index 
 		// O(2*log(n)) at worst
 		coalesce_info_t get_coalesce_info(void* ptr, std::size_t size) {
 			assert(ptr);
@@ -451,19 +488,19 @@ namespace cuw::mem {
 			// 1) lb != nullptr => ins_pos != nullptr (we aditionally find predecessor, ins_pos is successor => we're good)
 			// 2) lb == nullptr, ins_pos can be nullptr (tree is empty) or not (we find successor)
 			// 3) that's it, no more cases
-			fbd_t dummy = { .size = size, .data = ptr };
-			auto [lb_node, ins_pos_node] = bst::search_insert_lb(fbd_addr, fbd_t::addr_ops_t{}, &dummy.addr_index);
+			auto [lb_node, ins_pos_node] = bst::search_insert_lb(fbd_addr, fbd_t::addr_index_search_t{}, ptr);
 
-			fbd_t* ins_pos = ins_pos_node ? fbd_t::addr_index_to_descr(ins_pos_node) : nullptr;
-			fbd_t* right = lb_node ? fbd_t::addr_index_to_descr(lb_node) : nullptr;
+			fbd_t* ins_pos = fbd_t::addr_index_to_descr(ins_pos_node);
+			fbd_t* right = fbd_t::addr_index_to_descr(lb_node);
 
 			addr_index_t* left_node;
 			if (!lb_node || lb_node != ins_pos_node) {
 				left_node = ins_pos_node;
 			} else {
 				left_node = bst::predecessor(lb_node);
-			} fbd_t* left = left_node ? fbd_t::addr_index_to_descr(left_node) : nullptr;
+			} fbd_t* left = fbd_t::addr_index_to_descr(left_node);
 
+			fbd_t dummy = { .size = size, .data = ptr };
 			if (left && fbd_t::overlaps(&dummy, left) || right && fbd_t::overlaps(&dummy, right)) {
 				std::abort(); // most probably double free
 			}
@@ -474,11 +511,65 @@ namespace cuw::mem {
 			return {left, right, ins_pos, consumes_left, consumes_right};
 		}
 
-		// ... in between theese calls allocate fbd in any way (if it's required) ...
-		// ... and be careful when some code modifies index in between this calls as coalesce_info_t gets invalidated ...
+	private:
+		smd_t* get_first_sysmem_range(void* ptr) {
+			return smd_t::addr_index_to_descr(bst::lower_bound(smd_addr, smd_t::containing_block_search_t{}, ptr));
+		}
 
-		// this function modifies index
-		// fbd must be dummy (must not be acquired by appropriate call but used via dummy variable on stack like in get_coalesce_info)
+		smd_t* get_next_smd(smd_t* smd) {
+			return smd_t::addr_index_to_descr(bst::successor(&smd->addr_index));
+		}
+
+		bool allocate_sysmem_range(void* ptr, std::size_t size) {
+			smd_t* smd = get_first_sysmem_range(ptr);
+			if (!smd) {
+				return false; // very bad, no appropriate smd range found 
+			} while (smd && size != 0) {
+				auto a = (std::uintptr_t)ptr;
+				auto b1 = (std::uintptr_t)advance_ptr(ptr, size);
+				auto b2 = (std::uintptr_t)smd->get_end();
+				auto b = std::min(b1, b2);
+
+				auto delta = b - a;
+				ptr = advance_ptr(ptr, delta);
+				size -= delta;
+				smd->allocate(delta);
+				smd = get_next_smd(smd);
+			} return size == 0; // size = 0 then we successfully walked over all virtual memory regions
+		}
+
+		// TODO: coalesce blocks beforehand
+		// returns pointer to the new range start, nullptr - failure
+		void* deallocate_sysmem_range(void* ptr, std::size_t size) {
+			smd_t* first = get_first_sysmem_range(ptr);
+			if (!first) {
+				return false; 
+			}
+
+			smd_t* prev_smd = nullptr;
+			smd_t* curr_smd = first;
+			void* curr_ptr = ptr;
+			std::size_t curr_size = size;
+			while (curr_smd && curr_size != 0) {
+				auto a = (std::uintptr_t)curr_ptr;
+				auto b1 = (std::uintptr_t)advance_ptr(curr_ptr, curr_size);
+				auto b2 = (std::uintptr_t)curr_smd->get_end();
+				auto b = std::min(b1, b2);
+
+				auto delta = b - a;
+				curr_ptr = advance_ptr(curr_ptr, delta);
+				curr_size -= delta;
+				curr_smd->deallocate(delta);
+				prev_smd = curr_smd;
+				curr_smd = get_next_smd(curr_smd);
+			} if (size != 0) {
+				return false;
+			}
+
+			// TODO			
+		}
+
+		// fbd can be dummy (craeted on stack)
 		//
 		// if we dont require an fbd allocation(is_dummy can be true):
 		// coalesced_info_t info = ...;
@@ -492,13 +583,13 @@ namespace cuw::mem {
 		//
 		// block must not be in index before function call
 		// O(5 * log(n)) at worst (insert_lb counts as 2 operations)
-		fbd_t* insert_free_block(const coalesce_info_t& info, fbd_t* block, bool is_dummy) {
+		void insert_free_block(const coalesce_info_t& info, fbd_t* block, bool is_dummy) {
 			fbd_t* coalesced_block = block;
 			if (info.consumes_left) {
 				fbd_size = trb::remove(fbd_size, &info.left->size_index);
 				info.left->extend_right(coalesced_block->size);
 				if (!is_dummy) {
-					release_fbd(coalesced_block);
+					free_fbd(coalesced_block);
 				} coalesced_block = info.left;
 			}
 			
@@ -507,32 +598,48 @@ namespace cuw::mem {
 				info.right->extend_left(coalesced_block->size);
 				if (info.consumes_left) {
 					fbd_addr = trb::remove(fbd_addr, &coalesced_block->addr_index);
-					release_fbd(coalesced_block);
+					free_fbd(coalesced_block);
 				} coalesced_block = info.right;
 			}
 
-			fbd_size = trb::insert_lb(fbd_size, &coalesced_block->size_index, fbd_t::size_ops_t{});
+			fbd_size = trb::insert_lb(fbd_size, &coalesced_block->size_index, fbd_t::size_index_search_t{});
 			if (info.requires_fbd_alloc()) { // block must not be dummy, block is not in addr index
 				assert(!is_dummy);
-				fbd_addr = trb::insert_lb_hint(fbd_addr, &coalesced_block->addr_index, &info.ins_pos->addr_index, fbd_t::addr_ops_t{});
-			} return coalesced_block;
+				fbd_addr = trb::insert_lb_hint(fbd_addr, &coalesced_block->addr_index, &info.ins_pos->addr_index, fbd_t::addr_index_search_t{});
+			}
 		}
 
-		// this function modifies index
-		// inserted block must be true allocated fbd
-		fbd_t* insert_free_block(const coalesce_info_t& info, fbd_t* block) {
-			return insert_free_block(info, block, false);
-		}
-
-		// this function modifies index
 		// block will coalesce with some of the neighbours, we can use dummy fbd 
-		fbd_t* insert_free_block(const coalesce_info_t& info, void* data, std::size_t size) {
-			fbd_t dummy{ .size = size, .data = data };
-			return insert_free_block(info, &dummy, true);
+		bool insert_free_block(void* data, std::size_t size) {
+			void* new_data = deallocate_sysmem_range(data, size);
+			if (new_data == advance_ptr(data, size)) {
+				return true; // both memory ranges were freed	
+			} data = new_data;
+
+			coalesce_info_t info = get_coalesce_info(data, size);
+			if (info.requires_fbd_alloc()) {
+				if (fbd_t* fbd = alloc_fbd(data, size)) {
+					insert_free_block(info, fbd, false);
+					return true;
+				} return false;
+			} else {
+				fbd_t dummy{ .size = size, .data = data };
+				insert_free_block(info, &dummy, true);
+				return true;
+			}
+		}
+
+		// TODO : rename
+		[[nodiscard]] void* bite_free_block(fbd_t* block, std::size_t size) {
+			assert(is_aligned(size, page_size));
+
+			void* ptr = block->get_start();
+			if (!allocate_sysmem_range(ptr, size)) {
+				return nullptr;
+			} return shrink_fbd_left(block, size);
 		}
 
 	private:
-		// this function does not modify index
 		[[nodiscard]] smd_t* alloc_memory(std::size_t size) {
 			size = align_value(size, page_size);
 
@@ -546,12 +653,12 @@ namespace cuw::mem {
 				free_smd(smd);
 				return nullptr;
 			}
-				
-			smd_addr = trb::insert_lb(smd_addr, &smd->addr_index, smd_t::addr_ops_t{});
+
+			smd->allocated = size; // by default we allocate whole region			
+			smd_addr = trb::insert_lb(smd_addr, &smd->addr_index, smd_t::addr_index_search_t{});
 			return smd;
 		}
 
-		// this function does not modify index
 		void free_memory(smd_t* smd) {
 			base_t::deallocate(smd->data, smd->size);
 			smd_addr = trb::remove(smd_addr, &smd->addr_index);
@@ -559,43 +666,16 @@ namespace cuw::mem {
 		}
 
 	private:
-		// TODO : 
-		// this function modifies index
-		// fbd is already in the index
-		// TODO : change smd
-		[[nodiscard]] void* bite_free_block(fbd_t* block, std::size_t size) {
-			assert(is_aligned(size, page_size));
-			assert(block->size >= size);
-
-			void* ptr = block->get_start();
-			fbd_size = trb::remove(fbd_size, &block->size_index);
-			if (block->size != size) { // update block size by reinserting it into the free list
-				block->shrink_left(size);
-				fbd_size = trb::insert_lb(fbd_size, &block->size_index, fbd_t::size_ops_t{});
-			} else { // size will be zero, completely remove it from the free list
-				fbd_addr = trb::remove(fbd_addr, &block->addr_index);
-				release_fbd(block);
-			}
-			
-			// TODO : change smd
-
-			return ptr;
-		}
-
-		// this function modifies index
-		// TODO : change smd
 		[[nodiscard]] void* try_alloc_from_existing(std::size_t size) {
 			assert(is_aligned(size, page_size));
 
-			if (addr_index_t* found = bst::lower_bound(fbd_size, fbd_t::size_ops_t{}, size)) {
+			if (addr_index_t* found = bst::lower_bound(fbd_size, fbd_t::size_index_search_t{}, size)) {
 				return bite_free_block(fbd_t::size_index_to_descr(found), size);
 			} return nullptr;
 		}
 
-		// this function modifies index
 		// always allocates fbd for the remaining memory as a simplification
 		// as a fallback tries to allocate smaller memory region in case of failure
-		// TODO : change smd
 		[[nodiscard]] void* try_alloc_by_extend(std::size_t size) {
 			assert(is_aligned(size, page_size));
 
@@ -613,16 +693,12 @@ namespace cuw::mem {
 			std::size_t rest_size = size_ext - size;
 			if (rest_size == 0) {
 				return smd->data;
-			} if (fbd_t* fbd = alloc_fbd(rest_ptr, rest_size)) {
-				insert_free_block(get_coalesce_info(rest_ptr, rest_size), fbd);
-				return smd->data;
-			} else {
+			} if (!insert_free_block(rest_ptr, rest_size)) {
 				free_memory(smd);
 				return nullptr;
-			}
+			} return smd->data;
 		}
 
-		// this function modifies index
 		[[nodiscard]] void* try_alloc_memory(std::size_t size) {
 			assert(is_aligned(size, page_size));
 			if (void* ptr = try_alloc_from_existing(size)) {
@@ -631,30 +707,19 @@ namespace cuw::mem {
 		}
 
 	public:
-		// this function modifies index
 		[[nodiscard]] void* allocate(std::size_t size) {
 			return try_alloc_memory(align_value(size, page_size));
 		}
 
-		// this function modifies index
 		// when we deallocate we check if we require fbd for that as in the case of heavy fragmentation so we don't waste
 		// unneccessary fbds for that
-		// TODO : change smd
 		void deallocate(void* ptr, std::size_t size) {
 			size = align_value(size, page_size);
-			if (auto info = get_coalesce_info(ptr, size); info.requires_fbd_alloc()) {
-				if (fbd_t* fbd = alloc_fbd(ptr, size)) {
-					insert_free_block(info, fbd);
-				} else {
-					std::abort(); // we're fucked :D
-				}
-			} else {
-				insert_free_block(info, ptr, size);
+			if (!insert_free_block(ptr, size)) {
+				std::abort(); // we're fucked :D
 			}
 		}
 
-		// this function modifies index
-		// TODO : change smd
 		[[nodiscard]] void* reallocate(void* old_ptr, std::size_t old_size, std::size_t new_size) {
 			std::size_t old_size_aligned = align_value(old_size, page_size);
 			std::size_t new_size_aligned = align_value(new_size, page_size);
@@ -666,25 +731,19 @@ namespace cuw::mem {
 			if (new_size_aligned < old_size_aligned) {
 				void* old_ptr_end = (char*)old_ptr + new_size_aligned;
 				std::size_t delta = old_size_aligned - new_size_aligned;
-				if (auto info = get_coalesce_info(old_ptr_end, delta); info.requires_fbd_alloc()) {
-					if (fbd_t* fbd = alloc_fbd(old_ptr_end, delta)) {
-						insert_free_block(info, fbd);
-						return old_ptr;
-					} return nullptr;
-				} else {
-					insert_free_block(info, old_ptr_end, delta);
-					return old_ptr;
-				}
+				if (!insert_free_block(old_ptr_end, delta)) {
+					std::abort(); // we're fucked :D
+				} return old_ptr;
 			}
 
 			// new_size_aligned > old_size_aligned
 			// check if there is a block adjacent to right of the allocation
-			if (addr_index_t* found = bst::lower_bound(fbd_addr, fbd_t::addr_ops_t{}, old_ptr)) {
+			if (addr_index_t* found = bst::lower_bound(fbd_addr, fbd_t::addr_index_search_t{}, old_ptr)) {
 				fbd_t* block = fbd_t::addr_index_to_descr(found);
 				void* old_ptr_end = (char*)old_ptr + old_size_aligned;
 				std::size_t delta = new_size_aligned - old_size_aligned;
 				if (old_ptr_end == block->get_start() && block->size >= delta) {
-					void* dummy = bite_free_block(block, delta); // next allocated block is neighbour to us
+					(void)bite_free_block(block, delta); // next allocated block is neighbour to us
 					return old_ptr;
 				}
 			} if (void* new_ptr = this_t::allocate(new_size)) {
@@ -695,39 +754,32 @@ namespace cuw::mem {
 		}
 
 	public:
-		// this function does not modify index
 		// mostly for debugging purpose
 		auto get_size_index() const {
 			return bst::tree_wrapper_t{fbd_size};
 		}
 
-		// this function does not modify index
 		// mostly for debugging purpose
 		auto get_addr_index() const {
 			return bst::tree_wrapper_t{fbd_addr};
 		}
 
-		// this function does not modify index
 		std::size_t get_true_size(std::size_t size) {
 			return align_value(size, page_size);
 		}
 
-		// this function does not modify index
 		std::size_t get_page_size() const {
 			return page_size;
 		}
 
-		// this function does not modify index
 		std::size_t get_block_pool_size() const {
 			return block_pool_size;
 		}
 
-		// this function does not modify index
 		std::size_t get_min_block_size() const {
 			return min_block_size;
 		}
 
-		// this function does not modify index
 		std::size_t get_sysmem_pool_size() const {
 			return sysmem_pool_size;
 		}

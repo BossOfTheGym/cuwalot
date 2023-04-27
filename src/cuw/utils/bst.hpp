@@ -66,16 +66,32 @@ namespace cuw::bst {
 		} return lb;
 	}
 
+	// searches in reversed order
 	template<class node_t, class key_ops_t, class key_t>
-	node_t* upper_bound(node_t* root, key_ops_t&& kops, key_t&& key) {
+	node_t* rlower_bound(node_t* root, key_ops_t&& kops, key_t&& key) {
+		node_t* lb = nullptr;
+		node_t* curr = root;
+		while (curr) {
+			if (kops.compare(kops.get_key(curr), key)) {
+				curr = curr->left;
+			} else {
+				lb = curr;
+				curr = curr->right;
+			}
+		} return lb;
+	}
+
+	// searches in reversed order
+	template<class node_t, class key_ops_t, class key_t>
+	node_t* rupper_bound(node_t* root, key_ops_t&& kops, key_t&& key) {
 		node_t* ub = nullptr;
 		node_t* curr = root;
 		while (curr) {
 			if (!kops.compare(key, kops.get_key(curr))) {
-				curr = curr->right;
+				curr = curr->left;
 			} else {
 				ub = curr;
-				curr = curr->left;
+				curr = curr->right;
 			}
 		} return ub;
 	}
