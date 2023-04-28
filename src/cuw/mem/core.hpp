@@ -19,6 +19,7 @@
 #include <cuw/utils/trb_node.hpp>
 
 namespace cuw::mem {
+	using ptr_t = std::uintptr_t;
 	using attrs_t = std::uint64_t;
 	using flags_t = std::uint64_t;
 	using block_size_t = std::uint64_t;
