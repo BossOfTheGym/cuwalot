@@ -28,11 +28,11 @@ namespace cuw::mem {
 		}
 
 		static fbd_t* addr_index_to_descr(addr_index_t* ptr) {
-			return ptr ? base_to_obj(ptr, fbd_t, addr_index) : nullptr; // OOP is for suckers
+			return ptr ? base_to_obj(ptr, fbd_t, addr_index) : nullptr;
 		}
 
 		static fbd_t* size_index_to_descr(size_index_t* ptr) {
-			return ptr ? base_to_obj(ptr, fbd_t, size_index) : nullptr; // OOP is for suckers
+			return ptr ? base_to_obj(ptr, fbd_t, size_index) : nullptr;
 		}
 
 		struct addr_index_search_t : trb::implicit_key_t<addr_index_t> {
@@ -403,23 +403,42 @@ namespace cuw::mem {
 		}
 
 	private:
-		[[nodiscard]] fbd_t* try_alloc_fbd(void* data, std::size_t size) {
-			return fbd_entry.acquire(data, size);
+		[[nodiscard]] smd_t* alloc_memory(std::size_t size) {
+			size = align_value(size, page_size);
+
+			smd_t* smd = alloc_smd(nullptr, size);
+			if (!smd) {
+				return nullptr;
+			}
+
+			smd->data = base_t::allocate(size);
+			if (!smd->data) {
+				free_smd(smd);
+				return nullptr;
+			}
+
+			smd->allocated = size; // by default we allocate whole region			
+			smd_addr = trb::insert_lb(smd_addr, &smd->addr_index, smd_t::addr_index_search_t{});
+			return smd;
 		}
 
-		void extend_fbd() {
+		void free_memory(smd_t* smd) {
+			base_t::deallocate(smd->data, smd->size);
+			smd_addr = trb::remove(smd_addr, &smd->addr_index);
+			free_smd(smd);
+		}
+
+	private:
+		[[nodiscard]] fbd_t* alloc_fbd(void* data, std::size_t size) {
+			if (fbd_t* fbd = fbd_entry.acquire(data, size)) {
+				return fbd;
+			}
+			
 			std::size_t pool_size = block_pool_size;
 			void* pool_data = base_t::allocate(pool_size);
 			if (pool_data) {
 				fbd_entry.create_pool(pool_data, pool_size);
-			}
-		}
-
-		[[nodiscard]] fbd_t* alloc_fbd(void* data, std::size_t size) {
-			if (fbd_t* fbd = try_alloc_fbd(data, size)) {
-				return fbd;
-			} if (extend_fbd()) {
-				return try_alloc_fbd(data, size);
+				return fbd_entry.acquire(data, size);
 			} return nullptr;
 		}
 
@@ -461,8 +480,57 @@ namespace cuw::mem {
 				free_fbd(fbd);
 			} return ptr;
 		}
-		
+
 	private:
+		smd_t* get_first_sysmem_range(void* ptr) {
+			return smd_t::addr_index_to_descr(bst::lower_bound(smd_addr, smd_t::containing_block_search_t{}, ptr));
+		}
+
+		smd_t* get_next_smd(smd_t* smd) {
+			return smd_t::addr_index_to_descr(bst::successor(&smd->addr_index));
+		}
+
+		// func must not free smds
+		// void func(smd_t* curr_smd, std::uintptr_t start, std::uintptr_t end, std::uintptr_t step)
+		template<class func_t>
+		bool walk_sysmem_start(smd_t* start, void* ptr, std::size_t size, func_t func) {
+			smd_t* curr = start;
+			auto range_start = (std::uintptr_t)ptr;
+			auto range_end = (std::uintptr_t)advance_ptr(ptr, size);
+			while (curr && range_start != range_end) {			
+				auto curr_end = (std::uintptr_t)curr->get_end();
+				auto closest = std::min(curr_end, range_end);
+
+				func(curr, range_start, range_end, closest - range_start);
+
+				range_start = closest;
+				curr = get_next_smd(curr);
+			} return range_start == range_end; // size = 0 then we successfully walked over all memory regions
+		}
+
+		// func must not free smds
+		// void func(smd_t* curr_smd, std::uintptr_t start, std::uintptr_t end, std::uintptr_t step)
+		template<class func_t>
+		smd_t* walk_sysmem_range(void* ptr, std::size_t size, func_t func) {
+			if (smd_t* start = get_first_sysmem_range(ptr); start && walk_sysmem_start(start, ptr, size, func)) {
+				return start;
+			} return nullptr;
+		}
+
+		// returns pointer to the first range, nullptr on failure
+		smd_t* allocate_sysmem_range(void* ptr, std::size_t size) {
+			return walk_sysmem_range(ptr, size, [&] (smd_t* curr, std::uintptr_t start, std::uintptr_t end, std::uintptr_t step) {
+				curr->allocate(step);
+			});
+		}
+
+		// returns pointer to the first range, nullptr on failure
+		smd_t* deallocate_sysmem_range(void* ptr, std::size_t size) {
+			return walk_sysmem_range(ptr, size, [&] (smd_t* curr, std::uintptr_t start, std::uintptr_t end, std::uintptr_t step) {
+				curr->deallocate(step);
+			});
+		}
+
 		struct coalesce_info_t {
 			bool requires_fbd_alloc() const {
 				return !consumes_left && !consumes_right;
@@ -511,65 +579,8 @@ namespace cuw::mem {
 			return {left, right, ins_pos, consumes_left, consumes_right};
 		}
 
-	private:
-		smd_t* get_first_sysmem_range(void* ptr) {
-			return smd_t::addr_index_to_descr(bst::lower_bound(smd_addr, smd_t::containing_block_search_t{}, ptr));
-		}
-
-		smd_t* get_next_smd(smd_t* smd) {
-			return smd_t::addr_index_to_descr(bst::successor(&smd->addr_index));
-		}
-
-		bool allocate_sysmem_range(void* ptr, std::size_t size) {
-			smd_t* smd = get_first_sysmem_range(ptr);
-			if (!smd) {
-				return false; // very bad, no appropriate smd range found 
-			} while (smd && size != 0) {
-				auto a = (std::uintptr_t)ptr;
-				auto b1 = (std::uintptr_t)advance_ptr(ptr, size);
-				auto b2 = (std::uintptr_t)smd->get_end();
-				auto b = std::min(b1, b2);
-
-				auto delta = b - a;
-				ptr = advance_ptr(ptr, delta);
-				size -= delta;
-				smd->allocate(delta);
-				smd = get_next_smd(smd);
-			} return size == 0; // size = 0 then we successfully walked over all virtual memory regions
-		}
-
-		// TODO: coalesce blocks beforehand
-		// returns pointer to the new range start, nullptr - failure
-		void* deallocate_sysmem_range(void* ptr, std::size_t size) {
-			smd_t* first = get_first_sysmem_range(ptr);
-			if (!first) {
-				return false; 
-			}
-
-			smd_t* prev_smd = nullptr;
-			smd_t* curr_smd = first;
-			void* curr_ptr = ptr;
-			std::size_t curr_size = size;
-			while (curr_smd && curr_size != 0) {
-				auto a = (std::uintptr_t)curr_ptr;
-				auto b1 = (std::uintptr_t)advance_ptr(curr_ptr, curr_size);
-				auto b2 = (std::uintptr_t)curr_smd->get_end();
-				auto b = std::min(b1, b2);
-
-				auto delta = b - a;
-				curr_ptr = advance_ptr(curr_ptr, delta);
-				curr_size -= delta;
-				curr_smd->deallocate(delta);
-				prev_smd = curr_smd;
-				curr_smd = get_next_smd(curr_smd);
-			} if (size != 0) {
-				return false;
-			}
-
-			// TODO			
-		}
-
-		// fbd can be dummy (craeted on stack)
+		// impl function
+		// fbd can be dummy (created on stack)
 		//
 		// if we dont require an fbd allocation(is_dummy can be true):
 		// coalesced_info_t info = ...;
@@ -609,60 +620,91 @@ namespace cuw::mem {
 			}
 		}
 
-		// block will coalesce with some of the neighbours, we can use dummy fbd 
-		bool insert_free_block(void* data, std::size_t size) {
-			void* new_data = deallocate_sysmem_range(data, size);
-			if (new_data == advance_ptr(data, size)) {
-				return true; // both memory ranges were freed	
-			} data = new_data;
+		// main insert function
+		bool insert_free_block(void* ptr, std::size_t size) {
+			smd_t* first = deallocate_sysmem_range(ptr, size);
+			if (!first) {
+				return false;
+			}
 
-			coalesce_info_t info = get_coalesce_info(data, size);
+			bool info_spoiled = false;
+			coalesce_info_t info = get_coalesce_info(ptr, size);
+
+			smd_t* curr = first;
+			auto range_start = (std::uintptr_t)ptr;
+			auto range_end = (std::uintptr_t)advance_ptr(ptr, size);
+
+			if (curr->is_free()) {
+				if (info.left) {
+					auto a = (std::uintptr_t)info.left->get_end();
+					auto b = (std::uintptr_t)curr->get_start();
+					if (a > b) {
+						shrink_fbd_right(info.left, a - b);
+						info_spoiled = true;
+					}
+				}
+			} else { // skip first non-free block
+				auto curr_end = (std::uintptr_t)curr->get_end();
+				if (range_end >= curr_end) {
+					range_start = curr_end;
+					curr = get_next_smd(curr);
+				}
+			}
+
+			while (curr->is_free() && range_start != range_end) {
+				auto curr_end = (std::uintptr_t)curr->get_end();
+				auto closest = std::min(range_end, curr_end);
+
+				if (closest == range_end) {
+					range_start = range_end;
+					break;
+				}
+
+				smd_t* next = get_next_smd(curr);
+				free_memory(curr);
+				range_start = closest;
+				curr = next;
+			}
+
+			if (curr->is_free() && info.right) {
+				auto a = (std::uintptr_t)info.right->get_start();
+				auto b = (std::uintptr_t)curr->get_end();
+				if (a < b) {
+					shrink_fbd_left(info.right, b - a);
+					info_spoiled = true;
+				}
+			}
+
+			if (curr->is_free()) {
+				free_memory(curr);
+			}
+
+			if (range_start == range_end) {
+				return true;
+			}
+
+			if (info_spoiled) {
+				info = get_coalesce_info(ptr, size);
+			}
+			
 			if (info.requires_fbd_alloc()) {
-				if (fbd_t* fbd = alloc_fbd(data, size)) {
+				if (fbd_t* fbd = alloc_fbd(ptr, size)) {
 					insert_free_block(info, fbd, false);
 					return true;
 				} return false;
-			} else {
-				fbd_t dummy{ .size = size, .data = data };
-				insert_free_block(info, &dummy, true);
-				return true;
 			}
+			fbd_t dummy{ .size = size, .data = ptr };
+			insert_free_block(info, &dummy, true);
+			return true;
 		}
 
-		// TODO : rename
 		[[nodiscard]] void* bite_free_block(fbd_t* block, std::size_t size) {
 			assert(is_aligned(size, page_size));
 
 			void* ptr = block->get_start();
-			if (!allocate_sysmem_range(ptr, size)) {
-				return nullptr;
-			} return shrink_fbd_left(block, size);
-		}
-
-	private:
-		[[nodiscard]] smd_t* alloc_memory(std::size_t size) {
-			size = align_value(size, page_size);
-
-			smd_t* smd = alloc_smd(nullptr, size);
-			if (!smd) {
-				return nullptr;
-			}
-
-			smd->data = base_t::allocate(size);
-			if (!smd->data) {
-				free_smd(smd);
-				return nullptr;
-			}
-
-			smd->allocated = size; // by default we allocate whole region			
-			smd_addr = trb::insert_lb(smd_addr, &smd->addr_index, smd_t::addr_index_search_t{});
-			return smd;
-		}
-
-		void free_memory(smd_t* smd) {
-			base_t::deallocate(smd->data, smd->size);
-			smd_addr = trb::remove(smd_addr, &smd->addr_index);
-			free_smd(smd);
+			if (smd_t* first = allocate_sysmem_range(ptr, size)) {
+				return shrink_fbd_left(block, size);
+			} return nullptr;
 		}
 
 	private:
@@ -743,7 +785,7 @@ namespace cuw::mem {
 				void* old_ptr_end = (char*)old_ptr + old_size_aligned;
 				std::size_t delta = new_size_aligned - old_size_aligned;
 				if (old_ptr_end == block->get_start() && block->size >= delta) {
-					(void)bite_free_block(block, delta); // next allocated block is neighbour to us
+					void* dummy = bite_free_block(block, delta); // next allocated block is neighbour to us
 					return old_ptr;
 				}
 			} if (void* new_ptr = this_t::allocate(new_size)) {
