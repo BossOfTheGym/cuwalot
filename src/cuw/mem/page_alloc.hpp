@@ -15,12 +15,16 @@ namespace cuw::mem {
 	struct alignas(block_align) free_block_descr_t {
 		using fbd_t = free_block_descr_t;
 
-		static bool overlaps(fbd_t* fbd1, fbd_t* fbd2) {
+		static bool overlaps(fbd_t* fbd, void* ptr, std::size_t size) {
 			auto l1 = (std::uintptr_t)fbd1->get_start();
 			auto r1 = (std::uintptr_t)fbd1->get_end();
-			auto l2 = (std::uintptr_t)fbd2->get_start();
-			auto r2 = (std::uintptr_t)fbd2->get_end();
+			auto l2 = (std::uintptr_t)ptr;
+			auto r2 = (std::uintptr_t)advance_ptr(ptr, size);
 			return l2 < r1 && l1 < r2;
+		}
+
+		static bool overlaps(fbd_t* fbd1, fbd_t* fbd2) {
+			return overlaps(fbd1, fbd2->get_start(), fbd2->size)
 		}
 
 		static bool preceds(fbd_t* fbd1, fbd_t* fbd2) {
@@ -66,6 +70,10 @@ namespace cuw::mem {
 				return block_end > ptr_value;
 			}
 		};
+
+		std::size_t get_size() const {
+			return size;
+		}
 
 		void* get_start() const {
 			return data;
@@ -142,24 +150,7 @@ namespace cuw::mem {
 			return (char*)data + size;
 		}
 
-		void allocate(std::size_t size) {
-			allocated += size;
-		}
-
-		void deallocate(std::size_t size) {
-			allocated -= size;
-		}
-
-		bool is_full() const {
-			return allocated == size;
-		}
-
-		bool is_free() const {
-			return allocated == 0;
-		}
-
 		addr_index_t addr_index;
-		attrs_t :16, allocated:48; 
 		attrs_t offset:16, size:48;
 		void* data;
 	};
@@ -246,96 +237,6 @@ namespace cuw::mem {
 		page_alloc_t& operator = (page_alloc_t&&) = delete;
 
 	private:
-		void merge_fbds_insertion(page_alloc_t& another) {
-			fbd_entry.adopt(another.fbd_entry); // we now posess all fbd entries, so we can free them from this allocator
-			bst::traverse_inorder(another.fbd_addr, [&] (addr_index_t* node) {
-				fbd_t* fbd = fbd_t::addr_index_to_descr(node);
-				insert_free_block(get_coalesce_info(fbd->data, fbd->size), fbd);
-			});
-			another.fbd_addr = nullptr;
-			another.fbd_size = nullptr;
-		}
-
-		void merge_fbds_flatten(page_alloc_t& another) { 
-			fbd_entry.adopt(another.fbd_entry); // we now posess all fbd entries, so we can free them from this allocator
-
-			auto [curr1, curr1_tail] = bst::flatten(fbd_addr);
-			auto [curr2, curr2_tail] = bst::flatten(another.fbd_addr);
-
-			fbd_t* curr_fbd = nullptr;
-			bst::head_tail_t<addr_index_t> merged;
-
-			auto try_merge = [&] (fbd_t* dst, fbd_t* src) {
-				if (dst && dst->get_end() == src->get_start()) {
-					dst->extend_right(src->size);
-					return true;
-				} return false;
-			};
-
-			auto add_fbd = [&] (fbd_t* fbd) {
-				merged.append(&fbd->addr_index);
-			};
-
-			auto merge_fbd = [&] (fbd_t* fbd1, fbd_t* fbd2) {
-				if (try_merge(fbd1, fbd2)) {
-					free_fbd(fbd2);
-					return fbd1;
-				} else {
-					add_fbd(fbd1);
-					return fbd2;
-				}
-			};
-
-			while (curr1 && curr2) {
-				fbd_t* fbd1 = fbd_t::addr_index_to_descr(curr1);
-				fbd_t* fbd2 = fbd_t::addr_index_to_descr(curr2);
-				if (fbd_t::overlaps(fbd1, fbd2)) {
-					std::abort();
-				} if (fbd_t::preceds(fbd1, fbd2)) {
-					curr1 = curr1->left;
-					curr_fbd = merge_fbd(curr_fbd, fbd1);
-				} else {
-					curr2 = curr2->left;
-					curr_fbd = merge_fbd(curr_fbd, fbd2);
-				}
-			} while (curr1) {
-				fbd_t* fbd = fbd_t::addr_index_to_descr(curr1);
-				curr1 = curr1->left;
-				curr_fbd = merge_fbd(curr_fbd, fbd);
-			} while (curr2) {
-				fbd_t* fbd = fbd_t::size_index_to_descr(curr2);
-				curr2 = curr2->left;
-				curr_fbd = merge_fbd(curr_fbd, fbd);
-			} if (curr_fbd) {
-				add_fbd(curr_fbd);
-			} else {
-				return;
-			}
-
-			// rebuilding indices
-			merged.traverse([&] (addr_index_t* node) {
-				fbd_t* fbd = fbd_t::addr_index_to_descr(node);
-				fbd_size = trb::insert_lb(fbd_size, &fbd->size_index, fbd_t::size_index_search_t{});
-			});
-			merged.traverse([&] (addr_index_t* node) {
-				fbd_addr = trb::insert_lb(fbd_addr, node, fbd_t::addr_index_search_t{});
-			});
-			another.fbd_addr = nullptr;
-			another.fbd_size = nullptr;
-		}
-
-		void merge_fbds(page_alloc_t& another) {
-			std::size_t a = fbd_entry.get_count();
-			std::size_t b = another.fbd_entry.get_count();
-			std::size_t d = (a < b ? b - a : a - b);
-			std::size_t k = base_t::alloc_merge_coef;
-			if ((a + b) / d > k) {
-				merge_fbds_flatten(another);
-			} else {
-				merge_fbds_insertion(another);
-			}
-		}
-
 		void merge_smds(page_alloc_t& another) {
 			addr_index_t* merge_addr_into = smd_addr;
 			addr_index_t* merge_addr_from = another.smd_addr;
@@ -352,21 +253,46 @@ namespace cuw::mem {
 			another.smd_addr = nullptr;
 		}
 
+		void merge_fbds(page_alloc_t& another) {
+			std::size_t a = fbd_entry.get_count();
+			std::size_t b = another.fbd_entry.get_count();
+			fbd_entry.adopt(another.fbd_entry);
+
+			if (a < b) {
+				std::swap(fbd_addr, another.fbd_addr);
+				std::swap(fbd_size, another.fbd_size);
+			}
+
+			bst::traverse_inorder(another.fbd_addr, [&] (addr_index_t* node) {
+				fbd_t* fbd = fbd_t::addr_index_to_descr(node);
+				void* ptr = fbd->get_start();
+				std::size_t size = fbd->get_size();
+				free_fbd(fbd, block_pool_release_mode_t::NoReinsertFree);
+				insert_free_block(ptr, size);
+			});
+
+			another.fbd_addr = nullptr;
+			another.fbd_size = nullptr;
+		}
+
 	public:
 		void adopt(page_alloc_t& another) {
 			if (this == &another) {
 				return;
 			}
 			base_t::adopt(another);
-			merge_fbds(another);
 			merge_smds(another);
+			merge_fbds(another);
 		}
 
-		// mostly for debugging purpose
+		// mostly for debugging purposes
 		void release_mem() {
 			fbd_addr = nullptr;
 			fbd_size = nullptr;
-			fbd_entry.release_all([&] (void* block, std::size_t size) { return true; });
+			fbd_entry.release_all([&] (void* block, std::size_t size) {
+				base_t::deallocate(block, size);
+				return true;
+			});
 
 			bst::traverse_inorder(smd_addr, [&] (addr_index_t* node) {
 				smd_t* smd = smd_t::addr_index_to_descr(node);
@@ -417,7 +343,6 @@ namespace cuw::mem {
 				return nullptr;
 			}
 
-			smd->allocated = size; // by default we allocate whole region			
 			smd_addr = trb::insert_lb(smd_addr, &smd->addr_index, smd_t::addr_index_search_t{});
 			return smd;
 		}
@@ -442,8 +367,8 @@ namespace cuw::mem {
 			} return nullptr;
 		}
 
-		void free_fbd(fbd_t* fbd) {
-			if (bp_t* bp = fbd_entry.release(fbd)) {
+		void free_fbd(fbd_t* fbd, block_pool_release_mode_t mode = block_pool_release_mode_t::ReinsertFree) {
+			if (bp_t* bp = fbd_entry.release(fbd, mode)) {
 				fbd_entry.finish_release(bp, [&] (void* ptr, std::size_t size) {
 					base_t::deallocate(ptr, size);
 				});
@@ -482,55 +407,6 @@ namespace cuw::mem {
 		}
 
 	private:
-		smd_t* get_first_sysmem_range(void* ptr) {
-			return smd_t::addr_index_to_descr(bst::lower_bound(smd_addr, smd_t::containing_block_search_t{}, ptr));
-		}
-
-		smd_t* get_next_smd(smd_t* smd) {
-			return smd_t::addr_index_to_descr(bst::successor(&smd->addr_index));
-		}
-
-		// func must not free smds
-		// void func(smd_t* curr_smd, std::uintptr_t start, std::uintptr_t end, std::uintptr_t step)
-		template<class func_t>
-		bool walk_sysmem_start(smd_t* start, void* ptr, std::size_t size, func_t func) {
-			smd_t* curr = start;
-			auto range_start = (std::uintptr_t)ptr;
-			auto range_end = (std::uintptr_t)advance_ptr(ptr, size);
-			while (curr && range_start != range_end) {			
-				auto curr_end = (std::uintptr_t)curr->get_end();
-				auto closest = std::min(curr_end, range_end);
-
-				func(curr, range_start, range_end, closest - range_start);
-
-				range_start = closest;
-				curr = get_next_smd(curr);
-			} return range_start == range_end; // size = 0 then we successfully walked over all memory regions
-		}
-
-		// func must not free smds
-		// void func(smd_t* curr_smd, std::uintptr_t start, std::uintptr_t end, std::uintptr_t step)
-		template<class func_t>
-		smd_t* walk_sysmem_range(void* ptr, std::size_t size, func_t func) {
-			if (smd_t* start = get_first_sysmem_range(ptr); start && walk_sysmem_start(start, ptr, size, func)) {
-				return start;
-			} return nullptr;
-		}
-
-		// returns pointer to the first range, nullptr on failure
-		smd_t* allocate_sysmem_range(void* ptr, std::size_t size) {
-			return walk_sysmem_range(ptr, size, [&] (smd_t* curr, std::uintptr_t start, std::uintptr_t end, std::uintptr_t step) {
-				curr->allocate(step);
-			});
-		}
-
-		// returns pointer to the first range, nullptr on failure
-		smd_t* deallocate_sysmem_range(void* ptr, std::size_t size) {
-			return walk_sysmem_range(ptr, size, [&] (smd_t* curr, std::uintptr_t start, std::uintptr_t end, std::uintptr_t step) {
-				curr->deallocate(step);
-			});
-		}
-
 		struct coalesce_info_t {
 			bool requires_fbd_alloc() const {
 				return !consumes_left && !consumes_right;
@@ -593,8 +469,10 @@ namespace cuw::mem {
 		// insert_free_block(info, block)
 		//
 		// block must not be in index before function call
-		// O(5 * log(n)) at worst (insert_lb counts as 2 operations)
-		void insert_free_block(const coalesce_info_t& info, fbd_t* block, bool is_dummy) {
+		// O(4 * log(n)) at worst (insert_lb counts as 2 operations)
+		// returns coalesced block
+		// TODO
+		fbd_t* coalesce_free_block(const coalesce_info_t& info, fbd_t* block, bool is_dummy) {
 			fbd_t* coalesced_block = block;
 			if (info.consumes_left) {
 				fbd_size = trb::remove(fbd_size, &info.left->size_index);
@@ -613,98 +491,31 @@ namespace cuw::mem {
 				} coalesced_block = info.right;
 			}
 
-			fbd_size = trb::insert_lb(fbd_size, &coalesced_block->size_index, fbd_t::size_index_search_t{});
 			if (info.requires_fbd_alloc()) { // block must not be dummy, block is not in addr index
 				assert(!is_dummy);
 				fbd_addr = trb::insert_lb_hint(fbd_addr, &coalesced_block->addr_index, &info.ins_pos->addr_index, fbd_t::addr_index_search_t{});
-			}
+			} return coalesced_block;
 		}
 
 		// main insert function
 		bool insert_free_block(void* ptr, std::size_t size) {
-			smd_t* first = deallocate_sysmem_range(ptr, size);
-			if (!first) {
-				return false;
-			}
-
-			bool info_spoiled = false;
-			coalesce_info_t info = get_coalesce_info(ptr, size);
-
-			smd_t* curr = first;
-			auto range_start = (std::uintptr_t)ptr;
-			auto range_end = (std::uintptr_t)advance_ptr(ptr, size);
-
-			if (curr->is_free()) {
-				if (info.left) {
-					auto a = (std::uintptr_t)info.left->get_end();
-					auto b = (std::uintptr_t)curr->get_start();
-					if (a > b) {
-						shrink_fbd_right(info.left, a - b);
-						info_spoiled = true;
-					}
-				}
-			} else { // skip first non-free block
-				auto curr_end = (std::uintptr_t)curr->get_end();
-				if (range_end >= curr_end) {
-					range_start = curr_end;
-					curr = get_next_smd(curr);
-				}
-			}
-
-			while (curr->is_free() && range_start != range_end) {
-				auto curr_end = (std::uintptr_t)curr->get_end();
-				auto closest = std::min(range_end, curr_end);
-
-				if (closest == range_end) {
-					range_start = range_end;
-					break;
-				}
-
-				smd_t* next = get_next_smd(curr);
-				free_memory(curr);
-				range_start = closest;
-				curr = next;
-			}
-
-			if (curr->is_free() && info.right) {
-				auto a = (std::uintptr_t)info.right->get_start();
-				auto b = (std::uintptr_t)curr->get_end();
-				if (a < b) {
-					shrink_fbd_left(info.right, b - a);
-					info_spoiled = true;
-				}
-			}
-
-			if (curr->is_free()) {
-				free_memory(curr);
-			}
-
-			if (range_start == range_end) {
-				return true;
-			}
-
-			if (info_spoiled) {
-				info = get_coalesce_info(ptr, size);
-			}
-			
+			auto info = get_coalesce_info(ptr, size);
 			if (info.requires_fbd_alloc()) {
 				if (fbd_t* fbd = alloc_fbd(ptr, size)) {
-					insert_free_block(info, fbd, false);
-					return true;
-				} return false;
+					coalesce_free_block(info, fbd, false);
+				} else {
+					return false;
+				}
+			} else {
+				fbd_t dummy{ .size = size, .data = ptr };
+				coalesce_free_block(info, &dummy, true);
+				return true;
 			}
-			fbd_t dummy{ .size = size, .data = ptr };
-			insert_free_block(info, &dummy, true);
-			return true;
 		}
 
 		[[nodiscard]] void* bite_free_block(fbd_t* block, std::size_t size) {
 			assert(is_aligned(size, page_size));
-
-			void* ptr = block->get_start();
-			if (smd_t* first = allocate_sysmem_range(ptr, size)) {
-				return shrink_fbd_left(block, size);
-			} return nullptr;
+			return shrink_fbd_left(block, size);
 		}
 
 	private:

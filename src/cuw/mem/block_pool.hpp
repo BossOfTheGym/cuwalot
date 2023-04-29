@@ -244,6 +244,11 @@ namespace cuw::mem {
 		bpl_cache_t empty_entries{};
 	};
 
+	enum class block_pool_release_mode_t {
+		ReinsertFree,
+		NoReinsertFree,
+	};
+
 	class block_pool_entry_t : protected block_pool_cache_t {
 	public:
 		using bp_t = block_pool_t;
@@ -274,18 +279,27 @@ namespace cuw::mem {
 		}
 
 		// returns pool descriptor(block_pool) when it becomes empty
-		bp_t* release(void* block_mem, attrs_t block_offset) {
+		bp_t* release(void* block_mem, attrs_t block_offset, block_pool_release_mode_t mode = block_pool_release_mode_t::ReinsertFree) {
 			bp_t* primary_block = bp_t::primary_block(block_mem, block_offset);
 
 			block_pool_wrapper_t pool{primary_block};
+
+			bool was_full = pool.full();
 			pool.release(block_mem, block_offset);
-			if (!pool.empty()) {
+			
+			if (was_full) {
 				base_t::reinsert_free(primary_block);
-				return nullptr; // bp is not empty, return nullptr
-			} else {
-				base_t::reinsert_empty(primary_block);
-				return primary_block; // bp is empty, call finish_release
+				return nullptr;
 			}
+
+			if (!pool.empty()) {
+				if (mode == block_pool_release_mode_t::ReinsertFree) {
+					base_t::reinsert_free(primary_block);
+				} return nullptr; // bp is not empty, return nullptr
+			}
+
+			base_t::reinsert_empty(primary_block);
+			return primary_block; // bp is empty, call finish_release
 		}
 
 		// void func(void* mem, std::size_t size)
@@ -309,19 +323,6 @@ namespace cuw::mem {
 		template<class func_t>
 		void release_empty(func_t func) {
 			base_t::release_empty([&] (bp_t* bp) { return func(bp->get_data(), bp->get_size()); });
-		}
-
-		// bool func(void*, std::size_t)
-		// returns true if empty pool was completely freed
-		// returns false if either func doesn't want to free pool or there are no more empty pools 
-		template<class func_t>
-		bool pop_empty(func_t func) {
-			if (bp_t* bp = base_t::peek_empty()) {
-				base_t::erase(bp);
-				if (func(bp->get_data(), bp->get_size())) {
-					return true;
-				} base_t::insert_empty(bp);				
-			} return false;
 		}
 	};
 }
