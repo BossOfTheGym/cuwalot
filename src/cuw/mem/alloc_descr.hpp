@@ -279,7 +279,7 @@ namespace cuw::mem {
 
 		ad_t* find(void* addr) {
 			// lower_bound search can guarantee that addr < block end but it doesn't guarantee that addr belongs to block
-			if (addr_index_t* found = bst::lower_bound(index, ad_t::addr_ops_t{}, addr)) {
+			if (addr_index_t* found = bst::lower_bound(index, addr, ad_t::addr_ops_t{})) {
 				ad_t* descr = ad_t::addr_index_to_descr(found);
 				return descr->has_addr(addr) ? descr : nullptr;
 			} return nullptr;

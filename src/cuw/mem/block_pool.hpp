@@ -97,7 +97,7 @@ namespace cuw::mem {
 		}
 
 		void* get_data() const {
-			return (char*)pool + block_align;
+			return (char*)pool + block_size;
 		}
 
 		attrs_t get_size() const {

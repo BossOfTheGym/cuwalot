@@ -209,8 +209,7 @@ namespace cuw::mem {
 	public: // for debug
 		void release_mem() {
 			auto release_func = [&] (void* block, attrs_t offset, void* data, attrs_t size) {
-				base_t::deallocate(data, size);
-				// free_descr(block, offset); // we can leak descrs here as all blocks will be freed anyways
+				base_t::deallocate(data, size); // we can leak descrs here as all blocks will be freed anyways				
 			};
 			pools.release_all(addr_cache, release_func);
 			raw_bins.release_all(addr_cache, release_func);

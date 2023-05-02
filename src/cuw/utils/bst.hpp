@@ -52,8 +52,8 @@ namespace cuw::bst {
 		} return succ;
 	}
 
-	template<class node_t, class key_ops_t, class key_t>
-	node_t* lower_bound(node_t* root, key_ops_t&& kops, key_t&& key) {
+	template<class node_t, class key_t, class key_ops_t>
+	node_t* lower_bound(node_t* root, key_t&& key, key_ops_t&& kops) {
 		node_t* lb = nullptr;
 		node_t* curr = root;
 		while (curr) {
@@ -67,8 +67,8 @@ namespace cuw::bst {
 	}
 
 	// searches in reversed order
-	template<class node_t, class key_ops_t, class key_t>
-	node_t* rlower_bound(node_t* root, key_ops_t&& kops, key_t&& key) {
+	template<class node_t, class key_t, class key_ops_t>
+	node_t* rlower_bound(node_t* root, key_t&& key, key_ops_t&& kops) {
 		node_t* lb = nullptr;
 		node_t* curr = root;
 		while (curr) {
@@ -82,8 +82,8 @@ namespace cuw::bst {
 	}
 
 	// searches in reversed order
-	template<class node_t, class key_ops_t, class key_t>
-	node_t* rupper_bound(node_t* root, key_ops_t&& kops, key_t&& key) {
+	template<class node_t, class key_t, class key_ops_t>
+	node_t* rupper_bound(node_t* root, key_t&& key, key_ops_t&& kops) {
 		node_t* ub = nullptr;
 		node_t* curr = root;
 		while (curr) {
@@ -160,8 +160,8 @@ namespace cuw::bst {
 	};
 
 	// result can be used to test if node with given key exists in tree
-	template<class node_t, class key_ops_t, class key_t>
-	search_res_t<node_t> search_insert_lb(node_t* root, key_ops_t&& kops, key_t&& key) {
+	template<class node_t, class key_t, class key_ops_t>
+	search_res_t<node_t> search_insert_lb(node_t* root, key_t&& key, key_ops_t&& kops) {
 		node_t* lb = nullptr;
 		node_t* prev = nullptr;
 		node_t* curr = root;
@@ -177,8 +177,8 @@ namespace cuw::bst {
 	}
 
 	// result can be used to insert node only, check if key exists in tree is impossible
-	template<class node_t, class key_ops_t, class key_t>
-	node_t* search_insert_ub(node_t* root, key_ops_t&& kops, key_t&& key) {
+	template<class node_t, class key_t, class key_ops_t>
+	node_t* search_insert_ub(node_t* root, key_t&& key, key_ops_t&& kops) {
 		node_t* prev = nullptr;
 		node_t* curr = root;
 		while (curr) {

@@ -36,7 +36,7 @@ namespace cuw::mem {
 		struct alloc_block_pool_size_t<alloc_traits_t,
 			std::void_t<enable_option_t<std::size_t, decltype(alloc_traits_t::alloc_block_pool_size)>>> {
 			static constexpr std::size_t alloc_block_pool_size = alloc_traits_t::alloc_block_pool_size;
-			static_assert(alloc_block_pool_size / block_align >= min_pool_blocks);
+			static_assert(alloc_block_pool_size / block_size >= min_pool_blocks);
 		};
 
 		template<class alloc_traits_t, class = void>
@@ -48,7 +48,7 @@ namespace cuw::mem {
 		struct alloc_sysmem_pool_size_t<alloc_traits_t,
 			std::void_t<enable_option_t<std::size_t, decltype(alloc_traits_t::alloc_sysmem_pool_size)>>> {
 			static constexpr std::size_t alloc_sysmem_pool_size = alloc_traits_t::alloc_sysmem_pool_size;
-			static_assert(alloc_sysmem_pool_size / block_align >= min_pool_blocks);
+			static_assert(alloc_sysmem_pool_size / block_size >= min_pool_blocks);
 		};
 
 		template<class alloc_traits_t, class = void>

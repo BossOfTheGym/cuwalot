@@ -76,7 +76,7 @@ namespace cuw::trb {
 	[[nodiscard]] node_t* insert_lb(node_t* root, node_t* node, key_ops_t&& kops) {
 		assert(node);
 
-		auto [lb, prev] = bst::search_insert_lb(root, kops, kops.get_key(node));
+		auto [lb, prev] = bst::search_insert_lb(root, kops.get_key(node), kops);
 		return insert_lb_hint(root, node, prev, kops);
 	}
 
@@ -108,7 +108,7 @@ namespace cuw::trb {
 	[[nodiscard]] node_t* insert_ub(node_t* root, node_t* node, key_ops_t&& kops) {
 		assert(node);
 
-		node_t* prev = bst::search_insert_ub(root, kops, kops.get_key(node));
+		node_t* prev = bst::search_insert_ub(root, kops.get_key(node), kops);
 		return insert_ub_hint(root, node, prev, kops);
 	}
 

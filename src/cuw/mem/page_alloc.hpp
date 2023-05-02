@@ -16,15 +16,15 @@ namespace cuw::mem {
 		using fbd_t = free_block_descr_t;
 
 		static bool overlaps(fbd_t* fbd, void* ptr, std::size_t size) {
-			auto l1 = (std::uintptr_t)fbd1->get_start();
-			auto r1 = (std::uintptr_t)fbd1->get_end();
+			auto l1 = (std::uintptr_t)fbd->get_start();
+			auto r1 = (std::uintptr_t)fbd->get_end();
 			auto l2 = (std::uintptr_t)ptr;
 			auto r2 = (std::uintptr_t)advance_ptr(ptr, size);
 			return l2 < r1 && l1 < r2;
 		}
 
 		static bool overlaps(fbd_t* fbd1, fbd_t* fbd2) {
-			return overlaps(fbd1, fbd2->get_start(), fbd2->size)
+			return overlaps(fbd1, fbd2->get_start(), fbd2->size);
 		}
 
 		static bool preceds(fbd_t* fbd1, fbd_t* fbd2) {
@@ -172,9 +172,9 @@ namespace cuw::mem {
 			} return nullptr;
 		}
 
-		bp_t* release(descr_t* fbd) {
+		bp_t* release(descr_t* fbd, block_pool_release_mode_t mode) {
 			--count;
-			return base_t::release(fbd, fbd->offset);
+			return base_t::release(fbd, fbd->offset, mode);
 		}
 
 		void adopt(descr_entry_t& another) {
@@ -196,13 +196,14 @@ namespace cuw::mem {
 
 	// all allocations will be multiple of page_size
 	// size is now size in bytes
-	// size cannot be less than page_size or block_align
-	// O(7 * log(n)) complexity at its finest on deallocation
+	// size cannot be less than page_size or block_size
+	// O(13 * log(n) + walk) complexity at its finest on deallocation
 	template<class basic_alloc_t>
 	class page_alloc_t : public basic_alloc_t {
 	public:
 		using this_t = page_alloc_t;
 		using base_t = basic_alloc_t;
+		using bp_t = block_pool_t;
 		using fbd_t = free_block_descr_t;
 		using smd_t = sysmem_descr_t;
 		using fbd_entry_t = free_block_descr_entry_t;
@@ -320,8 +321,8 @@ namespace cuw::mem {
 			return smd_entry.acquire(data, size);
 		}
 
-		void free_smd(smd_t* smd) {
-			if (bp_t* bp = smd_entry.release(smd)) {
+		void free_smd(smd_t* smd, block_pool_release_mode_t mode = block_pool_release_mode_t::ReinsertFree) {
+			if (bp_t* bp = smd_entry.release(smd, mode)) {
 				smd_entry.finish_release(bp, [&] (void* data, std::size_t size) {
 					base_t::deallocate(data, size);
 				});
@@ -376,7 +377,7 @@ namespace cuw::mem {
 		}
 
 	private:
-		void* shrink_fbd_left(fbd_t* fbd, std::size_t size) {
+		[[nodiscard]] void* shrink_fbd_left(fbd_t* fbd, std::size_t size) {
 			assert(size);
 			assert(fbd->size >= size);
 
@@ -391,7 +392,7 @@ namespace cuw::mem {
 			} return ptr;
 		}
 
-		void* shrink_fbd_right(fbd_t* fbd, std::size_t size) {
+		[[nodiscard]] void* shrink_fbd_right(fbd_t* fbd, std::size_t size) {
 			assert(size);
 			assert(fbd->size >= size);
 
@@ -432,7 +433,7 @@ namespace cuw::mem {
 			// 1) lb != nullptr => ins_pos != nullptr (we aditionally find predecessor, ins_pos is successor => we're good)
 			// 2) lb == nullptr, ins_pos can be nullptr (tree is empty) or not (we find successor)
 			// 3) that's it, no more cases
-			auto [lb_node, ins_pos_node] = bst::search_insert_lb(fbd_addr, fbd_t::addr_index_search_t{}, ptr);
+			auto [lb_node, ins_pos_node] = bst::search_insert_lb(fbd_addr, ptr, fbd_t::addr_index_search_t{});
 
 			fbd_t* ins_pos = fbd_t::addr_index_to_descr(ins_pos_node);
 			fbd_t* right = fbd_t::addr_index_to_descr(lb_node);
@@ -511,16 +512,16 @@ namespace cuw::mem {
 				coalesced_block = coalesce_free_block(info, &dummy, true);
 			}
 
-			smd_t* curr_smd = smd_t::addr_index_to_descr(bst::lower_bound(smd_addr, smd_t::containing_block_search_t{}, ptr));
+			smd_t* curr_smd = smd_t::addr_index_to_descr(bst::lower_bound(smd_addr, ptr, smd_t::containing_block_search_t{}));
 			if (!curr_smd || (std::uintptr_t)ptr < (std::uintptr_t)curr_smd->get_start()) {
 				std::abort(); // no contanining sysmem region
 			}
 
-			auto coalesced_block_start = coalesced_block->get_start();
-			auto coalesced_block_end = coalesced_block->get_end();
+			auto coalesced_block_start = (std::uintptr_t)coalesced_block->get_start();
+			auto coalesced_block_end = (std::uintptr_t)coalesced_block->get_end();
 			auto cut_start = coalesced_block_end;
 			auto cut_end = coalesced_block_start;
-			while (curr_smd && (std::uintptr_t)curr_smd->start() < coalesced_block_end) {
+			while (curr_smd && (std::uintptr_t)curr_smd->get_start() < coalesced_block_end) {
 				auto curr_smd_start = (std::uintptr_t)curr_smd->get_start();
 				auto curr_smd_end = (std::uintptr_t)curr_smd->get_end();
 
@@ -537,20 +538,20 @@ namespace cuw::mem {
 
 			if (cut_start >= cut_end) {
 				// no parts at all, inserting into the size index
-				fbd_size = trb::insert_lb(fbd_size, fbd_t::size_index_search_t{}, &coalesced_block->size_index);
+				fbd_size = trb::insert_lb(fbd_size, &coalesced_block->size_index, fbd_t::size_index_search_t{});
 				return;
 			}
 
 			if (cut_start != coalesced_block_start) {
 				// shrinking block so has the same size as the first part
 				coalesced_block->shrink_right(coalesced_block_end - cut_start);
-				fbd_size = trb::insert_lb(fbd_size, fbd_t::size_index_search_t{}, &coalesced_block->size_index);
+				fbd_size = trb::insert_lb(fbd_size, &coalesced_block->size_index, fbd_t::size_index_search_t{});
 
 				if (cut_end != coalesced_block_end) {
 					// inserting the second part
-					if (fbd_t* fbd = alloc_fbd((void*)cut_end, coalesced_block_end - cut_end);) {
-						fbd_addr = trb::insert_lb(fbd_addr, fbd_t::addr_index_search_t{}, &fbd->addr_index_t);
-						fbd_size = trb::insert_lb(fbd_size, fbd_t::size_index_search_t{}, &fbd->size_index_t);
+					if (fbd_t* fbd = alloc_fbd((void*)cut_end, coalesced_block_end - cut_end)) {
+						fbd_addr = trb::insert_lb(fbd_addr, &fbd->addr_index, fbd_t::addr_index_search_t{});
+						fbd_size = trb::insert_lb(fbd_size, &fbd->size_index, fbd_t::size_index_search_t{});
 					} else {
 						std::abort();
 					}
@@ -558,10 +559,10 @@ namespace cuw::mem {
 			} else if (cut_end != coalesced_block_end) {
 				// first part is missing, inserting the second part
 				coalesced_block->shrink_left(cut_end - cut_start);
-				fbd_size = trb::insert_lb(fbd_size, fbd_t::size_index_search_t{}, &coalesced_block->size_index);
+				fbd_size = trb::insert_lb(fbd_size, &coalesced_block->size_index, fbd_t::size_index_search_t{});
 			} else {
 				// no parts, completely remove block from the index
-				fbd_addr = trb::remove(fbd_addr, &coalesced_block->addr_index); 
+				fbd_addr = trb::remove(fbd_addr, &coalesced_block->addr_index);
 			}
 		}
 
@@ -574,7 +575,7 @@ namespace cuw::mem {
 		[[nodiscard]] void* try_alloc_from_existing(std::size_t size) {
 			assert(is_aligned(size, page_size));
 
-			if (addr_index_t* found = bst::lower_bound(fbd_size, fbd_t::size_index_search_t{}, size)) {
+			if (addr_index_t* found = bst::lower_bound(fbd_size, size, fbd_t::size_index_search_t{})) {
 				return bite_free_block(fbd_t::size_index_to_descr(found), size);
 			} return nullptr;
 		}
@@ -618,7 +619,7 @@ namespace cuw::mem {
 		// when we deallocate we check if we require fbd for that as in the case of heavy fragmentation so we don't waste
 		// unneccessary fbds for that
 		void deallocate(void* ptr, std::size_t size) {
-			insert_free_block(ptr, align_value(size, page_size))
+			insert_free_block(ptr, align_value(size, page_size));
 		}
 
 		[[nodiscard]] void* reallocate(void* old_ptr, std::size_t old_size, std::size_t new_size) {
@@ -638,7 +639,7 @@ namespace cuw::mem {
 
 			// new_size_aligned > old_size_aligned
 			// check if there is a block adjacent to right of the allocation
-			if (addr_index_t* found = bst::lower_bound(fbd_addr, fbd_t::addr_index_search_t{}, old_ptr)) {
+			if (addr_index_t* found = bst::lower_bound(fbd_addr, old_ptr, fbd_t::addr_index_search_t{})) {
 				fbd_t* block = fbd_t::addr_index_to_descr(found);
 				void* old_ptr_end = (char*)old_ptr + old_size_aligned;
 				std::size_t delta = new_size_aligned - old_size_aligned;

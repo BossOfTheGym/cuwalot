@@ -110,7 +110,7 @@ public:
 	}
 
 	bool remove(int key) {
-		node_t* lb = bst::lower_bound(root, key_ops, key);
+		node_t* lb = bst::lower_bound(root, key, key_ops);
 		if (lb && !(key < lb->data)) {
 			root = trb::remove(root, lb);
 			storage.destroy(lb);
@@ -119,7 +119,7 @@ public:
 	}
 
 	bool has(int key) {
-		node_t* lb = bst::lower_bound(root, key_ops, key);
+		node_t* lb = bst::lower_bound(root, key, key_ops);
 		return lb && !(key < lb->data);
 	}
 
