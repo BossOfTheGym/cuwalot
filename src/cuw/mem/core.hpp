@@ -24,7 +24,7 @@ namespace cuw::mem {
 	using flags_t = std::uint64_t;
 	using block_size_t = std::uint64_t;
 
-	inline constexpr attrs_t min_pool_blocks = 2;
+	inline constexpr attrs_t min_pool_blocks = 4;
 	inline constexpr attrs_t max_pool_blocks = (1 << 16) - 1;
 	inline constexpr attrs_t block_pool_head_empty = max_pool_blocks;
 
@@ -49,7 +49,7 @@ namespace cuw::mem {
 
 	inline constexpr attrs_t default_min_pool_power = 15; // 32K
 	inline constexpr attrs_t default_max_pool_power = 20; // 1M
-	inline constexpr attrs_t default_min_pool_size = (attrs_t)1 << default_min_pool_power; 
+	inline constexpr attrs_t default_min_pool_size = (attrs_t)1 << default_min_pool_power;
 	inline constexpr attrs_t default_max_pool_size = (attrs_t)1 << default_max_pool_power;
 
 	inline constexpr int default_pool_cache_lookups = 4; // lookups in free_list to access chunk(to realloc or free)

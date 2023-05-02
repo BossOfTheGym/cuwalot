@@ -24,14 +24,14 @@ namespace cuw::mem {
 
 		// offset is zero-based and means offset from the first possible allocated block (not primary block)
 		static bp_t* primary_block(void* block, attrs_t offset) {
-			return transform_ptr<bp_t>(block, -(std::ptrdiff_t)((offset + 1) * block_align));
+			return transform_ptr<bp_t>(block, -(std::ptrdiff_t)((offset + 1) * block_size));
 		}
 
 		static attrs_t primary_offset(bp_t* primary_block, void* block) {
 			auto primary_block_value = (std::uintptr_t)primary_block;
 			auto block_value = (std::uintptr_t)block;
 			if (block_value >= primary_block_value) {
-				return (block_value - primary_block_value) / block_align;
+				return (block_value - primary_block_value) / block_size;
 			} return block_pool_head_empty;
 		}
 
@@ -65,7 +65,7 @@ namespace cuw::mem {
 	private:
 		// index start from 0 from the start of the data segment (not counting first block)
 		void* get_block(attrs_t index) const {
-			return (char*)get_data() + index * block_align;
+			return (char*)get_data() + index * block_size;
 		}
 
 	public:
@@ -188,21 +188,9 @@ namespace cuw::mem {
 			free_entries.reinsert(pool);
 		}
 
-		void insert_empty(bp_t* pool) {
-			empty_entries.insert(pool);
-		}
-
-		void reinsert_empty(bp_t* pool) {
-			empty_entries.reinsert(pool);
-		}
-
-		bp_t* peek_empty() const {
-			return empty_entries.peek();
-		}
-
 
 		void insert(bp_t* pool) {
-			insert_empty(pool);
+			insert_free(pool);
 		}
 
 		void erase(bp_t* pool) {
@@ -211,37 +199,25 @@ namespace cuw::mem {
 		}
 
 		bp_t* peek() const {
-			if (bp_t* bp = free_entries.peek()) {
-				return bp;
-			} if (bp_t* bp = empty_entries.peek()) {
-				return bp;
-			} return nullptr;
+			return free_entries.peek();
 		}
 
 		void adopt(block_pool_cache_t& another) {
 			full_entries.adopt(another.full_entries);
 			free_entries.adopt(another.free_entries);
-			empty_entries.adopt(another.empty_entries);
 		}
+
 
 		// bool func(bp_t*)
 		template<class func_t>
 		void release_all(func_t func) {
 			full_entries.release_all(func);
 			free_entries.release_all(func);
-			empty_entries.release_all(func);
 		}
 
-		// bool func(bp_t*)
-		template<class func_t>
-		void release_empty(func_t func) {
-			empty_entries.release_all(func);
-		}
-		
 	private:
 		bpl_cache_t full_entries{};
 		bpl_cache_t free_entries{};
-		bpl_cache_t empty_entries{};
 	};
 
 	enum class block_pool_release_mode_t {
@@ -256,10 +232,10 @@ namespace cuw::mem {
 
 		void create_pool(void* mem, std::size_t size) {
 			assert(mem);
-			assert(size >= 2 * block_align);
-			assert(is_aligned(mem, block_align));
+			assert(size >= 2 * block_size);
+			assert(is_aligned(mem, block_size));
 
-			std::size_t capacity = std::min<std::size_t>(max_pool_blocks, size / block_align - 1);
+			std::size_t capacity = std::min<std::size_t>(max_pool_blocks, size / block_size - 1);
 			bp_t* bp = new (mem) bp_t { .size = size, .capacity = capacity, .head = block_pool_head_empty };
 			base_t::insert(bp);
 		}
@@ -287,19 +263,9 @@ namespace cuw::mem {
 			bool was_full = pool.full();
 			pool.release(block_mem, block_offset);
 			
-			if (was_full) {
+			if (was_full || mode == block_pool_release_mode_t::ReinsertFree) {
 				base_t::reinsert_free(primary_block);
-				return nullptr;
-			}
-
-			if (!pool.empty()) {
-				if (mode == block_pool_release_mode_t::ReinsertFree) {
-					base_t::reinsert_free(primary_block);
-				} return nullptr; // bp is not empty, return nullptr
-			}
-
-			base_t::reinsert_empty(primary_block);
-			return primary_block; // bp is empty, call finish_release
+			} return pool.empty() ? primary_block : nullptr;
 		}
 
 		// void func(void* mem, std::size_t size)
@@ -317,12 +283,6 @@ namespace cuw::mem {
 		template<class func_t>
 		void release_all(func_t func) {
 			base_t::release_all([&] (bp_t* bp) { return func(bp->get_data(), bp->get_size()); });
-		}
-
-		// bool func(void* mem, std::size_t size)
-		template<class func_t>
-		void release_empty(func_t func) {
-			base_t::release_empty([&] (bp_t* bp) { return func(bp->get_data(), bp->get_size()); });
 		}
 	};
 }

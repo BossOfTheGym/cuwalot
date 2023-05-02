@@ -256,8 +256,8 @@ namespace cuw::mem {
 		void merge_fbds(page_alloc_t& another) {
 			std::size_t a = fbd_entry.get_count();
 			std::size_t b = another.fbd_entry.get_count();
+			
 			fbd_entry.adopt(another.fbd_entry);
-
 			if (a < b) {
 				std::swap(fbd_addr, another.fbd_addr);
 				std::swap(fbd_size, another.fbd_size);
@@ -470,8 +470,8 @@ namespace cuw::mem {
 		//
 		// block must not be in index before function call
 		// O(4 * log(n)) at worst (insert_lb counts as 2 operations)
-		// returns coalesced block
-		// TODO
+		// returns coalesced block, block has already been inserted into the addr index but not into the size index
+		// so insert it into the size index at the end of operation
 		fbd_t* coalesce_free_block(const coalesce_info_t& info, fbd_t* block, bool is_dummy) {
 			fbd_t* coalesced_block = block;
 			if (info.consumes_left) {
@@ -491,25 +491,77 @@ namespace cuw::mem {
 				} coalesced_block = info.right;
 			}
 
-			if (info.requires_fbd_alloc()) { // block must not be dummy, block is not in addr index
+			if (info.requires_fbd_alloc()) { // block must not be dummy, block is not in addr index, insert
 				assert(!is_dummy);
 				fbd_addr = trb::insert_lb_hint(fbd_addr, &coalesced_block->addr_index, &info.ins_pos->addr_index, fbd_t::addr_index_search_t{});
 			} return coalesced_block;
 		}
 
-		// main insert function
-		bool insert_free_block(void* ptr, std::size_t size) {
-			auto info = get_coalesce_info(ptr, size);
+		// O(13*log(n) + walk), (insert_lb counts as 2 operations)
+		void insert_free_block(void* ptr, std::size_t size) {
+			fbd_t* coalesced_block = nullptr;
+			coalesce_info_t info = get_coalesce_info(ptr, size);
 			if (info.requires_fbd_alloc()) {
-				if (fbd_t* fbd = alloc_fbd(ptr, size)) {
-					coalesce_free_block(info, fbd, false);
-				} else {
-					return false;
-				}
+				fbd_t* fbd = alloc_fbd(ptr, size);
+				if (!fbd) {
+					std::abort();
+				} coalesced_block = coalesce_free_block(info, fbd, false);
 			} else {
 				fbd_t dummy{ .size = size, .data = ptr };
-				coalesce_free_block(info, &dummy, true);
-				return true;
+				coalesced_block = coalesce_free_block(info, &dummy, true);
+			}
+
+			smd_t* curr_smd = smd_t::addr_index_to_descr(bst::lower_bound(smd_addr, smd_t::containing_block_search_t{}, ptr));
+			if (!curr_smd || (std::uintptr_t)ptr < (std::uintptr_t)curr_smd->get_start()) {
+				std::abort(); // no contanining sysmem region
+			}
+
+			auto coalesced_block_start = coalesced_block->get_start();
+			auto coalesced_block_end = coalesced_block->get_end();
+			auto cut_start = coalesced_block_end;
+			auto cut_end = coalesced_block_start;
+			while (curr_smd && (std::uintptr_t)curr_smd->start() < coalesced_block_end) {
+				auto curr_smd_start = (std::uintptr_t)curr_smd->get_start();
+				auto curr_smd_end = (std::uintptr_t)curr_smd->get_end();
+
+				auto a = std::max(coalesced_block_start, curr_smd_start);
+				auto b = std::min(coalesced_block_end, curr_smd_end);
+
+				smd_t* next_smd = smd_t::addr_index_to_descr(bst::successor(&curr_smd->addr_index));
+				if (a == curr_smd_start && b == curr_smd_end) {
+					cut_start = std::min(cut_start, a);
+					cut_end = std::max(cut_end, b);
+					free_memory(curr_smd);
+				} curr_smd = next_smd;
+			}
+
+			if (cut_start >= cut_end) {
+				// no parts at all, inserting into the size index
+				fbd_size = trb::insert_lb(fbd_size, fbd_t::size_index_search_t{}, &coalesced_block->size_index);
+				return;
+			}
+
+			if (cut_start != coalesced_block_start) {
+				// shrinking block so has the same size as the first part
+				coalesced_block->shrink_right(coalesced_block_end - cut_start);
+				fbd_size = trb::insert_lb(fbd_size, fbd_t::size_index_search_t{}, &coalesced_block->size_index);
+
+				if (cut_end != coalesced_block_end) {
+					// inserting the second part
+					if (fbd_t* fbd = alloc_fbd((void*)cut_end, coalesced_block_end - cut_end);) {
+						fbd_addr = trb::insert_lb(fbd_addr, fbd_t::addr_index_search_t{}, &fbd->addr_index_t);
+						fbd_size = trb::insert_lb(fbd_size, fbd_t::size_index_search_t{}, &fbd->size_index_t);
+					} else {
+						std::abort();
+					}
+				}
+			} else if (cut_end != coalesced_block_end) {
+				// first part is missing, inserting the second part
+				coalesced_block->shrink_left(cut_end - cut_start);
+				fbd_size = trb::insert_lb(fbd_size, fbd_t::size_index_search_t{}, &coalesced_block->size_index);
+			} else {
+				// no parts, completely remove block from the index
+				fbd_addr = trb::remove(fbd_addr, &coalesced_block->addr_index); 
 			}
 		}
 
@@ -546,10 +598,9 @@ namespace cuw::mem {
 			std::size_t rest_size = size_ext - size;
 			if (rest_size == 0) {
 				return smd->data;
-			} if (!insert_free_block(rest_ptr, rest_size)) {
-				free_memory(smd);
-				return nullptr;
-			} return smd->data;
+			}
+			insert_free_block(rest_ptr, rest_size);
+			return smd->data;
 		}
 
 		[[nodiscard]] void* try_alloc_memory(std::size_t size) {
@@ -567,10 +618,7 @@ namespace cuw::mem {
 		// when we deallocate we check if we require fbd for that as in the case of heavy fragmentation so we don't waste
 		// unneccessary fbds for that
 		void deallocate(void* ptr, std::size_t size) {
-			size = align_value(size, page_size);
-			if (!insert_free_block(ptr, size)) {
-				std::abort(); // we're fucked :D
-			}
+			insert_free_block(ptr, align_value(size, page_size))
 		}
 
 		[[nodiscard]] void* reallocate(void* old_ptr, std::size_t old_size, std::size_t new_size) {
@@ -584,9 +632,8 @@ namespace cuw::mem {
 			if (new_size_aligned < old_size_aligned) {
 				void* old_ptr_end = (char*)old_ptr + new_size_aligned;
 				std::size_t delta = old_size_aligned - new_size_aligned;
-				if (!insert_free_block(old_ptr_end, delta)) {
-					std::abort(); // we're fucked :D
-				} return old_ptr;
+				insert_free_block(old_ptr_end, delta);
+				return old_ptr;
 			}
 
 			// new_size_aligned > old_size_aligned
