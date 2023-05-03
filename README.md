@@ -3,9 +3,6 @@ Tree-based memory allocator. Utilizes red-black trees. The best allocator in the
 
 # TODO
 **rework**
-- page_alloc: acquire/release memory range
-- page_alloc: free system memory range if it is completely free
-- page_alloc: free fbds if completely free
 - page_alloc tests
 
 **complete TODO**
@@ -18,5 +15,4 @@ Tree-based memory allocator. Utilizes red-black trees. The best allocator in the
 - cmake install rules
 
 **somewhat good TODO**
-- page_alloc: densening of fbd's
 - pool_alloc: densening of alloc_descr
