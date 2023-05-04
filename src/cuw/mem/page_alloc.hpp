@@ -563,6 +563,7 @@ namespace cuw::mem {
 			} else {
 				// no parts, completely remove block from the index
 				fbd_addr = trb::remove(fbd_addr, &coalesced_block->addr_index);
+				free_fbd(coalesced_block);
 			}
 		}
 
