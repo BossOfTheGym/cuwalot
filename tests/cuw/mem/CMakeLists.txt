@@ -26,3 +26,6 @@ target_link_libraries(test_alloc_wrappers cuw)
 
 add_executable(test_pool_alloc test_pool_alloc.cpp ${common_src})
 target_link_libraries(test_pool_alloc cuw)
+
+add_executable(test_alloc test_alloc.cpp ${common_src})
+target_link_libraries(test_alloc cuw)
