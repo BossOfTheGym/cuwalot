@@ -64,7 +64,7 @@ namespace {
 		alignas(chunk_align) std::uint8_t data[total_size] = {};
 
 		test_ad_t test_ad = create_pool(chunk_enum, total_size, data);
-		mem::basic_pool_wrapper_t wrapper(test_ad, (attrs_t)chunk_enum);
+		mem::basic_pool_wrapper_t wrapper(test_ad, (attrs_t)chunk_enum, chunk_align);
 
 		void* allocated[total_chunks] = {};
 

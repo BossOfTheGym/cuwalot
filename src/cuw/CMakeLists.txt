@@ -25,5 +25,6 @@ set(cuw_sources ${cuw_sources}
 )
 
 # TODO : maybe I should configure SHARED/STATIC?
-add_library(cuw SHARED ${cuw_sources})
+# TODO : fix SHARED build
+add_library(cuw STATIC ${cuw_sources})
 target_include_directories(cuw PUBLIC "../")

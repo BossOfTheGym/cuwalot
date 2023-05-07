@@ -19,8 +19,10 @@ endif()
 
 # workaround for exported symbols
 # TODO : DLLIMPORT/DLLEXPORT macros
-if (WIN32)
-	set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
+# TODO : fix SHARED build
+if (MSVC)
+	set(BUILD_SHARED_LIBS TRUE)
+	set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS TRUE)
 endif()
 
 # cpp standart

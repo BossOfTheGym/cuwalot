@@ -25,7 +25,7 @@ namespace {
 		std::size_t curr_descr = 0;
 
 		mem::alloc_descr_addr_cache_t addr_cache;
-		mem::pool_entry_t entry(chunk_enum);
+		mem::pool_entry_t entry(chunk_enum, chunk_size);
 
 		auto try_create_empty = [&] () {
 			if (curr_descr == total_pools) {
