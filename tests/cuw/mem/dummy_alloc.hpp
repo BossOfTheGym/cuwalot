@@ -13,7 +13,7 @@ using namespace cuw;
 
 namespace {
 	std::tuple<void*, void*> alloc_aligned(std::size_t size, std::size_t alignment) {
-		void* base_ptr = malloc(size + alignment);
+		void* base_ptr = std::malloc(size + alignment);
 		void* ptr = (void*)mem::align_value<std::uintptr_t>((std::uintptr_t)base_ptr, alignment);
 		return {base_ptr, ptr};
 	} 
@@ -260,8 +260,6 @@ namespace {
 		}
 
 		[[nodiscard]] void* reallocate_hint(void* hint, void* old_ptr, std::size_t old_size, std::size_t new_size) {
-			
-
 			std::cout << "reallocating memory " << old_ptr << " of size " << old_size << " to new size" << new_size << " using hint " << hint << std::endl;
 			if (void* new_ptr = allocate_hint(hint, new_size)) {
 				std::memcpy(new_ptr, old_ptr, std::min(old_size, new_size));
@@ -410,7 +408,7 @@ namespace {
 		void check_requests() {
 			if (requests.empty()) {
 				std::cout << "no more reallocate requests" << std::endl;
-				abort(); // TODO : exception
+				std::abort(); // TODO : exception
 			}
 		}
 
@@ -446,7 +444,7 @@ namespace {
 			} if (!request.matches_realloc_params(ptr, old_size, new_size)) {
 				std::cout << "parameters given do not match expected request" << std::endl;
 				return nullptr;
-			} if (void* ptr = alloc.rellocate_hint(request.hint, ptr, old_size, new_size)) {
+			} if (void* ptr = alloc.reallocate_hint(request.hint, ptr, old_size, new_size)) {
 				requests.pop_back();
 				return ptr;
 			} return nullptr;
@@ -537,7 +535,7 @@ namespace {
 
 	void check_allocation(void* allocated, void* expected) {
 		if (allocated != expected) {
-			std::cerr << "allocation is invalid: expected " << allocated << " but got " << expected << std::endl;
+			std::cerr << "allocation is invalid: expected " << expected << " but got " << allocated << std::endl;
 			std::abort();
 		}
 	}

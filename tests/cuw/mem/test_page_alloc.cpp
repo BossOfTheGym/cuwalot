@@ -31,16 +31,76 @@ namespace {
 	// u - unallocated block
 	// s - smd pool
 	// f - fbd pool
-	// 1 - occupied(allocated) block
-	// 0 - free(unallocated) block
+	// x - occupied(allocated) block
+	// o - free(unallocated) block
 	// - - allocated(used) block
-	// + - allocated(in allocator) block
+	// + - allocated(managed by fbd) block
 
 	// TODO
-	int test_alloc() {
-		std::cout << "testing allocation/deallocation" << std::endl;
+	int test_alloc1() {
+		std::cout << "testing allocation/deallocation(1)" << std::endl;
+
+		using page_alloc_t = mem::page_alloc_t<basic_alloc_t<1, 4, 2, 10>>;
+
+		page_alloc_t alloc(block_size_t{16}, block_size_t{1});
+
+		// 16 blocks
+		// uuuuuuuuuuuuuuuu alloc 10
+		// sx----------uuuu dealloc 2
+		// sx++--------fxoo dealloc 2
+		// sx++--++----fxxo dealloc 2
+		// sx++--++--++fxxx dealloc 2
+		// sx++++++--++fxxo dealloc 2
+		// uuuuuuuuuuuuuuuu
+
+		std::cout << "testing allocation/deallocation finished" << std::endl;
+
+		return 0;
+	}
+
+	// TODO
+	int test_alloc2() {
+		std::cout << "testing allocation/deallocation(2)" << std::endl;
 
 		using page_alloc_t = mem::page_alloc_t<basic_alloc_t<1, 3, 3, 4>>;
+
+		// 32 blocks
+		// uuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuu alloc 6
+		// sxoo------uuuuuuuuuuuuuuuuuuuuuu alloc 6
+		// sxxo------------uuuuuuuuuuuuuuuu alloc 6
+		// sxxx------------------uuuuuuuuuu dealloc 1
+		// sxxx+-----------------fxoooooooo dealloc 1
+		// sxxx+-+---------------fxxooooooo dealloc 3
+		// sxxx+-+-+++-----------fxxxoooooo dealloc 1
+		// sxxx+-+-+++-+---------fxxxxooooo dealloc 3
+		// sxxx+-+-+++-+-+++-----fxxxxxoooo dealloc 1
+		// sxxx+-+-+++-+-+++-+---fxxxxxxooo dealloc 2
+		// sxxx+-+-+++-+-+++-+-++fxxxxxxxoo dealloc 1
+		// sxxx+++-+++-+-+++-+-++fxxxxxxooo dealloc 1
+		// sxxouuuuuu+-+-+++-+-++fxxxxxoooo dealloc 1
+		// sxxouuuuuu+++-+++-+-++fxxxxxoooo dealloc 1
+		// sxoouuuuuuuuuuuu+-+-++fxxxoooooo dealloc 1
+		// sxoouuuuuuuuuuuu+++-++fxxooooooo dealloc 1
+		// uuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuu alloc 6
+		// sxoo------uuuuuuuuuuuuuuuuuuuuuu alloc 6
+		// sxxo------------uuuuuuuuuuuuuuuu alloc 6
+		// sxxx------------------uuuuuuuuuu dealloc 2
+		// sxxx++----------------fxoooooooo dealloc 2 
+		// sxxx++--------------++fxxooooooo dealloc 2
+		// sxxx++--++----------++fxxxoooooo dealloc 2
+		// sxxx++--++------++--++fxxxxooooo dealloc 6
+		// sxxo++--++uuuuuu++--++fxxxxooooo dealloc 2
+		// sxoouuuuuuuuuuuu++--++fxxooooooo dealloc 2
+		// uuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuu alloc 6
+		// sxoo------uuuuuuuuuuuuuuuuuuuuuu alloc 6
+		// sxxo------------uuuuuuuuuuuuuuuu alloc 6
+		// sxxx------------------uuuuuuuuuu dealloc 2
+		// sxxx++----------------fxoooooooo dealloc 2 
+		// sxxx++--------------++fxxooooooo dealloc 6
+		// sxxouuuuuu++--------++fxxooooooo dealloc 6
+		// sxxouuuuuu++--++uuuuuufxxooooooo dealloc 1
+		// sxxouuuuuu+++-++uuuuuufxoooooooo dealloc 1
+		// uuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuu
 
 		std::cout << "testing allocation/deallocation finished" << std::endl;
 
@@ -51,7 +111,17 @@ namespace {
 	int test_realloc() {
 		std::cout << "testing reallocation" << std::endl;
 
-		using page_alloc_t = mem::page_alloc_t<basic_alloc_t<1, 3, 2, 4>>;
+		using page_alloc_t = mem::page_alloc_t<basic_alloc_t<1, 4, 4, 6>>;
+
+		// 20 blocks
+		// uuuuuuuuuuuuuuuuuuuu alloc 6
+		// sxoo------uuuuuuuuuu dealloc 4
+		// sxoo--++++fxoouuuuuu realloc 2,4
+		// sxoo----++fxoouuuuuu realloc 4,6
+		// sxoo------uuuuuuuuuu dealloc 1
+		// sxoo+-----fxoouuuuuu realloc 5,6
+		// sxoouuuuuuuuuu------ dealloc 6
+		// uuuuuuuuuuuuuuuuuuuu
 
 		std::cout << "testing reallocation finished" << std::endl << std::endl;
 
@@ -61,25 +131,41 @@ namespace {
 	// TODO
 	int test_adopt() {
 		std::cout << "testing adoption" << std::endl;
-
-		using alloc_t = basic_alloc_t<1, 4, 2, 2>;
-		using proxy_alloc_t = scenario_alloc_t<alloc_t>;
-		using page_alloc_t = mem::page_alloc_t<proxy_alloc_t>;
-
-		std::cout << "adoption test successfully finished" << std::endl << std::endl;
-
-		return 0;
-	}
-
-	int test_adopt_advanced() {
-		std::cout << "testing adoption(advanced)" << std::endl;
 		
-		using common_alloc_t = basic_alloc_t<1, 4, 1, 2>;
+		using common_alloc_t = basic_alloc_t<1, 3, 3, 4>;
 		using seq_alloc_t = scenario_alloc_t<common_alloc_t>;
 		using proxy_alloc_t = dummy_alloc_proxy_t<seq_alloc_t>;
 		using alloc_t = mem::page_alloc_t<proxy_alloc_t>;
 
-		std::cout << "adoption test(advanced) successfully finished" << std::endl << std::endl;
+		// 28 blocks
+		// ............................
+		// uuuuuuuuuuuuuuuuuuuuuuuuuuuu 1. alloc 4
+		// 1..1........................
+		// sxo----uuuuuuuuuuuuuuuuuuuuu 1. dealloc 2
+		// 1..1.1.....1................
+		// sxx--++uuuufxouuuuuuuuuuuuuu 1. alloc 4
+		// 1..1.1.....1.....1..........
+		// sxx--++uuuufxouuu----uuuuuuu 1. dealloc 2
+		// 1..1.1.....1.....1.1........
+		// sxx--++uuuufxxuuu--++uuuuuuu 2. alloc 4
+		// 1..1.1.2...1..2..1.1........
+		// sxx--++----fxxsxo--++uuuuuuu 2. alloc 4
+		// 1..1.1.2...1..2..1.1.2......
+		// sxx--++----fxxsxx--++----uuu 2. dealloc 2
+		// 1..1.1.2.2.1..2..1.1.2...2..
+		// sxx--++++--fxxsxx--++----fxo 2. dealloc 2
+		// 1..1.1.2.2.1..2..1.1.2.2.2..
+		// sxx--++++--fxxsxx--++++--fxx
+		//
+		//          1 adopts 2
+		//
+		// sxx--++++--fxxsxx--++++--uuu dealloc 2
+		// sxx--++uuuufxxsxo--++++--uuu dealloc 2
+		// sxx--++uuuufxxuuu--++uuuuuuu dealloc 2
+		// sxx--++uuuufxouuuuuuuuuuuuuu dealloc 2
+		// uuuuuuuuuuuuuuuuuuuuuuuuuuuu
+
+		std::cout << "adoption test successfully finished" << std::endl << std::endl;
 
 		return 0;
 	}
@@ -178,13 +264,13 @@ namespace {
 }
 
 int main(int argc, char* argv[]) {
-	if (test_alloc()) {
+	if (test_alloc1()) {
+		return -1;
+	} if (test_alloc2()) {
 		return -1;
 	} if (test_realloc()) {
 		return -1;
 	} if (test_adopt()) {
-		return -1;
-	} if (test_adopt_advanced()) {
 		return -1;
 	} if (test_random_stuff()) {
 		return -1;
