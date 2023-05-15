@@ -359,6 +359,7 @@ namespace cuw::mem {
 		}
 
 		// TODO : check alignment requirements, check if we should store size or size_aligned
+		// ?
 		[[nodiscard]] void* alloc_raw(raw_bin_t& bin, std::size_t size, std::size_t alignment) {
 			auto [ad, offset] = alloc_descr();
 			if (!ad) {
