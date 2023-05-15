@@ -30,6 +30,10 @@ namespace cuw::mem {
 			list::insert_after(&entry, node);
 		}
 
+		void insert_back(entry_t* node) {
+			list::insert_before(&entry, node);
+		}
+
 		// node not neccessarily belongs to the list cache
 		// it may belong to another 
 		void reinsert(entry_t* node) {
@@ -55,20 +59,34 @@ namespace cuw::mem {
 			list::split(&entry, first, &part1.entry, &part2.entry);
 		}
 
-		// TODO : release_all rename traverse or for_each that can be destructive, leave bool return value as an indicator that entry was destroyed
+		// void func(entry_t*)
 		template<class func_t>
-		void release_all(func_t func) {
+		void traverse(func_t func) {
+			entry_t* head = &entry;
+			entry_t* curr = head->next;
+			while (curr != head) {
+				func(curr);
+				curr = curr->next;
+			}
+		}
+
+		// bool func(entry_t*)
+		// returns how many entries were released
+		template<class func_t>
+		int release_all(func_t func) {
 			entry_t* head = &entry;
 			entry_t* prev = head;
 			entry_t* curr = head->next;
+			int released = 0;
 			while (curr != head) {
 				entry_t* next = curr->next;
 				if (func(curr)) {
 					list::link(prev, next);
+					++freed;
 				} else {
 					prev = curr;
 				} curr = next;
-			}
+			} return released;
 		}
 
 		void reset() {

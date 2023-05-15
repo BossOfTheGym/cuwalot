@@ -8,7 +8,6 @@
 #include "alloc_entries.hpp"
 
 namespace cuw::mem {
-	// TODO: wrap it up so it counts allocated blocks
 	using alloc_descr_entry_t = block_pool_entry_t;
 
 	namespace impl {
@@ -66,6 +65,15 @@ namespace cuw::mem {
 				}
 			}
 
+			std::size_t get_count() const {
+				return total_pools;
+			}
+
+			pool_type_t& get(int i) {
+				assert(i >= 0 && i < total_pools);
+				return pools[i];
+			}
+
 			auto begin() {
 				return std::begin(pools);
 			}
@@ -99,6 +107,7 @@ namespace cuw::mem {
 			pool_type_t pools[total_pools] = {};
 		};
 
+		// TODO : bin sizes
 		template<class bin_type_t, attrs_t base_size, attrs_t total_bins>
 		class raw_bins_t {
 		public:
@@ -109,6 +118,15 @@ namespace cuw::mem {
 				for (attrs_t i = 1; i < total_bins; i++) {
 					size_limits[i - 1] = base_size << i;
 				}
+			}
+
+			std::size_t get_count() const {
+				return total_bins;
+			}
+
+			bin_type_t& get(int i) {
+				assert(i >= 0 && i < total_bins);
+				return bins[i];
 			}
 
 			auto begin() {
@@ -167,6 +185,7 @@ namespace cuw::mem {
 		using bp_t = block_pool_t;
 
 		using ad_t = alloc_descr_t;
+		using ad_state_t = alloc_descr_state_t;
 		using ad_entry_t = alloc_descr_entry_t;
 		using ad_addr_cache_t = alloc_descr_addr_cache_t;
 
@@ -180,6 +199,7 @@ namespace cuw::mem {
 		using raw_bins_t = impl::raw_bins_t<raw_bin_t, base_t::alloc_raw_base_size, base_t::alloc_total_raw_bins>;
 
 	public:
+		// TODO : initialize bin sizes
 		template<class ... args_t>
 		pool_alloc_t(args_t&& ... args) : base_t(std::forward<args_t>(args)...), pools(base_t::get_page_size()) {
 			min_pool_alignment = std::min(base_t::get_page_size(), pool_chunk_size((std::size_t)base_t::alloc_pool_first_chunk));
@@ -197,6 +217,7 @@ namespace cuw::mem {
 		pool_alloc_t& operator = (pool_alloc_t&&) = delete; 
 
 		void adopt(pool_alloc_t& another) {
+			// TODO
 			if (this == &another) {
 				return;
 			}
@@ -209,7 +230,8 @@ namespace cuw::mem {
 	public: // for debug
 		void release_mem() {
 			auto release_func = [&] (void* block, attrs_t offset, void* data, attrs_t size) {
-				base_t::deallocate(data, size); // we can leak descrs here as all blocks will be freed anyways				
+				base_t::deallocate(data, size); // we can leak descrs here as all blocks will be freed anyways
+				return true;			
 			};
 			pools.release_all(addr_cache, release_func);
 			raw_bins.release_all(addr_cache, release_func);
@@ -260,20 +282,38 @@ namespace cuw::mem {
 			} return {nullptr, block_pool_head_empty};
 		}
 
+		// index & cache data is invalidated
+		[[nodiscard]] ad_t* realloc_descr(ad_t* descr) {
+			assert(descr);
+
+			ad_state_t old_state = descr->get_state();
+			ad_entry.release(descr, descr->get_offset(), block_pool_release_mode_t::NoReinsertFree);
+
+			auto [new_block, new_offset] = ad_entry.acquire();
+
+			assert(new_block);
+
+			ad_t* new_descr = (ad_t*)new_block;
+			new_descr->set_state(old_state);
+			new_descr->set_offset(new_offset);
+			return new_descr;
+		}
+
 		// deallocates description, does not free associated memory
-		void free_descr(void* descr, attrs_t offset) {
-			if (bp_t* released = ad_entry.release(descr, offset)) {
+		void free_descr(void* descr, attrs_t offset, block_pool_release_mode_t mode = block_pool_release_mode_t::ReinsertFree) {
+			if (bp_t* released = ad_entry.release(descr, offset, mode)) {
 				ad_entry.finish_release(released, [&] (void* data, std::size_t size) {
 					base_t::deallocate(data, size);
+					return true;
 				});
 			}
 		}
 
 	private:
-		bool create_pool(pool_t& pool) {
+		ad_t* create_pool(pool_t& pool) {
 			auto [ad, offset] = alloc_descr();
 			if (!ad) {
-				return false;
+				return nullptr;
 			}
 
 			auto [pool_size, pool_capacity] = pool.get_next_pool_params(base_t::alloc_min_pool_power, base_t::alloc_max_pool_power);
@@ -281,11 +321,13 @@ namespace cuw::mem {
 			void* pool_data = base_t::allocate(pool_size);
 			if (!pool_data) {
 				free_descr(ad, offset);
-				return false;
+				return nullptr;
 			}
 			
-			pool.create(addr_cache, ad, offset, pool_size, pool_capacity, pool_data);
-			return true;
+			ad = pool.create(ad, offset, pool_size, pool_capacity, pool_data);
+			if (ad) {
+				addr_cache.insert(ad);
+			} return ad;
 		}
 
 		template<class entry_t>
@@ -294,6 +336,7 @@ namespace cuw::mem {
 				entry.finish_release(addr_cache, ad, [&] (void* block, attrs_t offset, void* data, attrs_t size) {
 					base_t::deallocate(data, size);
 					free_descr(block, offset);
+					return true;
 				});
 			}
 		}
@@ -315,6 +358,7 @@ namespace cuw::mem {
 			finish_release(pool, pool.release(ptr, ad));
 		}
 
+		// TODO : check alignment requirements, check if we should store size or size_aligned
 		[[nodiscard]] void* alloc_raw(raw_bin_t& bin, std::size_t size, std::size_t alignment) {
 			auto [ad, offset] = alloc_descr();
 			if (!ad) {
@@ -405,6 +449,7 @@ namespace cuw::mem {
 				}
 			}
 
+			// we fall here when either alignment or size is too big or both
 			if (std::size_t raw_alignment = adjust_raw_alignment(alignment)) {
 				std::size_t size_aligned = align_value(size, raw_alignment);
 				return alloc_raw(size_aligned, raw_alignment);
@@ -444,6 +489,7 @@ namespace cuw::mem {
 			}
 		}
 
+		// we fall here when either alignment or size is too big or both
 		void free42(void* ptr, std::size_t size, std::size_t alignment) {
 			assert(ptr);
 			assert(size != 0);

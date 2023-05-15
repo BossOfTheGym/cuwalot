@@ -17,26 +17,7 @@ namespace cuw::mem {
 			: base_t(chunk_enum, type), alignment{_alignment} {}
 
 	public:
-		attrs_t get_chunk_size() const {
-			return base_t::get_chunk_size();
-		}
-
-		attrs_t get_chunk_size_enum() const {
-			return base_t::get_chunk_size_enum();
-		}
-
-		// size, capacity
-		next_pool_params_t get_next_pool_params(attrs_t min_pools, attrs_t max_pools) const {
-			return base_t::get_next_pool_params(min_pools, max_pools);
-		}
-
-		ad_t* find(ad_addr_cache_t& addr_cache, void* addr, int max_lookups) {
-			if (ad_t* descr = base_t::find(addr, max_lookups)) {
-				return descr;
-			} return addr_cache.find(addr);
-		}
-
-		ad_t* create(ad_addr_cache_t& addr_cache, void* block, attrs_t offset, attrs_t size, attrs_t capacity, void* data) {
+		ad_t* create(void* block, attrs_t offset, attrs_t size, attrs_t capacity, void* data) {
 			assert(block);
 			assert(data);
 			assert(is_aligned(data, alignment));
@@ -48,8 +29,13 @@ namespace cuw::mem {
 				.data = data,
 			};
 			base_t::insert(descr);
-			addr_cache.insert(descr);
 			return descr;
+		}
+
+		ad_t* find(const ad_addr_cache_t& addr_cache, void* addr, int max_lookups) {
+			if (ad_t* descr = base_t::find(addr, max_lookups)) {
+				return descr;
+			} return addr_cache.find(addr);
 		}
 
 		template<class wrapper_t>
@@ -69,7 +55,7 @@ namespace cuw::mem {
 		}
 
 		template<class wrapper_t>
-		[[nodiscard]] ad_t* release(ad_addr_cache_t& addr_cache, void* ptr, int cache_lookups) {
+		[[nodiscard]] ad_t* release(const ad_addr_cache_t& addr_cache, void* ptr, int cache_lookups) {
 			if (ad_t* descr = find(addr_cache, ptr, cache_lookups)) {
 				return release<wrapper_t>(ptr, descr);
 			} std::abort();
@@ -86,27 +72,57 @@ namespace cuw::mem {
 			return pool.empty() ? descr : nullptr;
 		}
 
-		// void func(void* block, attrs_t offset, void* data, attrs_t size)
+		// bool func(void* block, attrs_t offset, void* data, attrs_t size)
 		template<class func_t>
-		void finish_release(ad_addr_cache_t& addr_cache, ad_t* descr, func_t func) {
-			base_t::erase(descr);
-			addr_cache.erase(descr);
-			func(descr, descr->get_offset(), descr->get_data(), descr->get_size());
+		bool finish_release(ad_t* descr, func_t func) {
+			if (func(descr, descr->get_offset(), descr->get_data(), descr->get_size())) {
+				base_t::erase(descr);
+				return true;
+			} return false;
 		}
 
-		// void func(void* block, attrs_t offset, void* data, attrs_t size)
+		// void func(ad_t* descr)
 		template<class func_t>
-		void release_all(ad_addr_cache_t& addr_cache, func_t func) {
-			base_t::release_all([&] (ad_t* descr) {
-				addr_cache.erase(descr);
-				func(descr, descr->get_offset(), descr->get_data(), descr->get_size());
+		void traverse(func_t func) {
+			base_t::traverse(func);
+		}
+
+		// bool func(void* block, attrs_t offset, void* data, attrs_t size)
+		template<class func_t>
+		int release_all(func_t func) {
+			return base_t::release_all([&] (ad_t* descr) {
+				return func(descr, descr->get_offset(), descr->get_data(), descr->get_size());
 			});
+		}
+
+		void insert(ad_t* descr) {
+			base_t::insert(descr);
+		}
+
+		void insert_back(ad_t* descr) {
+			base_t::insert_back(descr);
 		}
 
 		void reset() {
 			base_t::reset();
 		}
 
+		next_pool_params_t get_next_pool_params(attrs_t min_pools, attrs_t max_pools) const {
+			return base_t::get_next_pool_params(min_pools, max_pools);
+		}
+
+		attrs_t get_chunk_size() const {
+			return base_t::get_chunk_size();
+		}
+
+		attrs_t get_chunk_size_enum() const {
+			return base_t::get_chunk_size_enum();
+		}
+
+		attrs_t get_alignment() const {
+			return alignment;
+		}
+		
 	private:
 		attrs_t alignment{};
 	};
@@ -125,7 +141,7 @@ namespace cuw::mem {
 			return base_t::template acquire<wrapper_t>();
 		}
 
-		[[nodiscard]] ad_t* release(ad_addr_cache_t& addr_cache, void* ptr, int cache_lookups) {
+		[[nodiscard]] ad_t* release(const ad_addr_cache_t& addr_cache, void* ptr, int cache_lookups) {
 			return base_t::template release<wrapper_t>(addr_cache, ptr, cache_lookups);
 		}
 
@@ -146,14 +162,13 @@ namespace cuw::mem {
 		using ad_t = alloc_descr_t;
 		using ad_addr_cache_t = alloc_descr_addr_cache_t;
 
-		ad_t* find(ad_addr_cache_t& addr_cache, void* ptr, int max_lookups) {
+		ad_t* find(const ad_addr_cache_t& addr_cache, void* ptr, int max_lookups) {
 			if (ad_t* descr = base_t::find(ptr, max_lookups)) {
 				return descr;
 			} return addr_cache.find(ptr);
 		}
 
-		// NOTE: data must be aligned beforehand
-		void create(ad_addr_cache_t& addr_cache, void* block, attrs_t offset, attrs_t size, attrs_t alignment, void* data) {
+		ad_t* create(void* block, attrs_t offset, attrs_t size, attrs_t alignment, void* data) {
 			assert(block);
 			assert(data);
 			assert(is_aligned(data, alignment));
@@ -163,10 +178,10 @@ namespace cuw::mem {
 				.chunk_size = value_to_pool_chunk(alignment), .data = data
 			};
 			base_t::insert(descr);
-			addr_cache.insert(descr);
+			return descr;
 		}
 
-		[[nodiscard]] ad_t* release(ad_addr_cache_t& addr_cache, void* ptr, int max_lookups) {
+		[[nodiscard]] ad_t* release(const ad_addr_cache_t& addr_cache, void* ptr, int max_lookups) {
 			if (ad_t* descr = find(addr_cache, ptr, max_lookups)) {
 				return descr;
 			} std::abort();
@@ -176,38 +191,50 @@ namespace cuw::mem {
 			return descr;
 		}
 
-		// void func(void* block, attrs_t offset, void* data, attrs_t size)
+		// bool func(void* block, attrs_t offset, void* data, attrs_t size)
 		template<class func_t>
-		void finish_release(ad_addr_cache_t& addr_cache, ad_t* descr, func_t func) {
-			base_t::erase(descr);
-			addr_cache.erase(descr);
-			func(descr, descr->get_offset(), descr->get_data(), descr->get_size());
+		bool finish_release(ad_t* descr, func_t func) {
+			if (func(descr, descr->get_offset(), descr->get_data(), descr->get_size())) {
+				base_t::erase(descr);
+				return true;
+			} return false;
 		}
 
-		// void func(void* block, attrs_t offset, void* data, attrs_t size)
-		template<class func_t>		
-		void release_all(ad_addr_cache_t& addr_cache, func_t func) {
-			base_t::release_all([&] (ad_t* descr) {
-				addr_cache.erase(descr);
-				func(descr, descr->get_offset(), descr->get_data(), descr->get_size());
+		// void func(ad_t* descr)
+		template<class func_t>
+		void traverse(func_t func) {
+			base_t::traverse(func);
+		}
+
+		// bool func(void* block, attrs_t offset, void* data, attrs_t size)
+		template<class func_t>
+		int release_all(func_t func) {
+			return base_t::release_all([&] (ad_t* descr) {
+				return func(descr, descr->get_offset(), descr->get_data(), descr->get_size());
 			});
 		}
 
-		[[nodiscard]] ad_t* extract(ad_addr_cache_t& addr_cache, void* ptr, int max_lookups) {
+		[[nodiscard]] ad_t* extract(const ad_addr_cache_t& addr_cache, void*p tr, int max_lookups) {
 			if (ad_t* descr = find(addr_cache, ptr, max_lookups)) {
-				return extract(addr_cache, descr);
+				return extract(descr);
 			} return nullptr;
 		}
 
-		[[nodiscard]] ad_t* extract(ad_addr_cache_t& addr_cache, ad_t* descr) {
+		[[nodiscard]] ad_t* extract(ad_t* descr) {
 			base_t::erase(descr);
-			addr_cache.erase(descr);
 			return descr;
 		}
 
-		void put_back(ad_addr_cache_t& addr_cache, ad_t* descr) {
+		void put_back(ad_t* descr) {
 			base_t::insert(descr);
-			addr_cache.insert(descr);
+		}
+
+		void insert(ad_t* descr) {
+			base_t::insert(descr);
+		}
+
+		void insert_back(ad_t* descr) {
+			base_t::insert_back(descr);
 		}
 
 		void adopt(raw_entry_t& another, int first_part) {

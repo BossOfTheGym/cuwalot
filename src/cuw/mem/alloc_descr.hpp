@@ -6,6 +6,13 @@
 namespace cuw::mem {
 	using alloc_descr_list_t = list_entry_t;
 
+	// all crucial data fields
+	struct alloc_descr_state_t {
+		attrs_t offset:16, size:48;
+		attrs_t type:3, chunk_size:5, capacity:14, used:14, count:14, head:14;
+		void* data;
+	};
+
 	// if we want to allocate memory we can use already existing pool and if we don't have one, we allocate one.
 	// we have burning desire to place pool storage aligned to page size (welp, we can just align it to the chunk size)
 	// so we can deal with alignment issues relatevely cheap and we don't want to waste much space in case of big chunks so... 
@@ -57,6 +64,27 @@ namespace cuw::mem {
 				return (std::uintptr_t)addr >= (std::uintptr_t)descr->block_end();
 			}
 		};
+
+
+		alloc_descr_state_t get_state() const {
+			return {
+				.offset = offset, .size = size,
+				.type = type, .chunk_size = chunk_size, .capacity = capacity, .used = used, .count = count, .head = head,
+				.data = data
+			};
+		}
+
+		void set_state(const alloc_descr_state_t& state) {
+			offset = state.offset;
+			size = state.size;
+			type = state.type;
+			chunk_size = state.chunk_size;
+			capacity = state.capacity;
+			used = state.used;
+			count = state.count;
+			head = state.head;
+			data = state.data;
+		}
 
 
 		attrs_t get_type() const {
@@ -215,6 +243,10 @@ namespace cuw::mem {
 			base_t::insert(&descr->list_entry);
 		}
 
+		void insert_back(ad_t* descr) {
+			base_t::insert_back(&descr->list_entry);
+		}
+
 		void reinsert(ad_t* descr) {
 			base_t::reinsert(&descr->list_entry);
 		}
@@ -251,11 +283,14 @@ namespace cuw::mem {
 
 		// void func(ad_t* descr)
 		template<class func_t>
-		void release_all(func_t func) {
-			base_t::release_all([&] (adl_t* entry) {
-				func(ad_t::list_entry_to_descr(entry));
-				return true;
-			});
+		void traverse(func_t func) {
+			base_t::traverse([&] (adl_t* entry) { func(ad_t::list_entry_to_descr(entry)); });
+		}
+
+		// bool func(ad_t* descr)
+		template<class func_t>
+		int release_all(func_t func) {
+			return base_t::release_all([&] (adl_t* entry) { return func(ad_t::list_entry_to_descr(entry)); });
 		}
 
 		void reset() {
@@ -263,21 +298,21 @@ namespace cuw::mem {
 		}
 	};
 
-	class alloc_descr_addr_cache_t {
-	public:
+	// little helper
+	struct alloc_descr_addr_cache_t {
 		using ad_t = alloc_descr_t;
 
 		void insert(ad_t* descr) {
-			index = trb::insert_lb(index, &descr->addr_index, ad_t::addr_ops_t{});
 			++count;
+			index = trb::insert_lb(index, &descr->addr_index, ad_t::addr_ops_t{});
 		}
 
 		void erase(ad_t* descr) {
-			index = trb::remove(index, &descr->addr_index);
 			--count;
+			index = trb::remove(index, &descr->addr_index);
 		}
 
-		ad_t* find(void* addr) {
+		ad_t* find(void* addr) const {
 			// lower_bound search can guarantee that addr < block end but it doesn't guarantee that addr belongs to block
 			if (addr_index_t* found = bst::lower_bound(index, addr, ad_t::addr_ops_t{})) {
 				ad_t* descr = ad_t::addr_index_to_descr(found);
@@ -285,22 +320,15 @@ namespace cuw::mem {
 			} return nullptr;
 		}
 
-		void adopt(alloc_descr_addr_cache_t& another) {
-			addr_index_t* merge_into = index;
-			addr_index_t* merge_from = another.index;
-			if (count < another.count) {
-				std::swap(merge_into, merge_from);
-			}
-			bst::traverse_inorder(merge_from, [&] (addr_index_t* addr) {
-				merge_into = trb::insert_lb(merge_into, addr, ad_t::addr_ops_t{});
-			});
-			index = merge_into;
-			count += another.count;
-			another.index = nullptr;
-			another.count = 0;
+		void reset() {
+			index = nullptr;
+			count = 0;
 		}
 
-	private:
+		std::size_t get_size() const {
+			return count;
+		}
+
 		addr_index_t* index{};
 		std::size_t count{};
 	};
@@ -347,24 +375,20 @@ namespace cuw::mem {
 	// full_cache: list of description blocks (pools) that have no free chunks
 	class alloc_descr_pool_cache_t : public pool_entry_ops_t {
 	public:
-		using ops_t = pool_entry_ops_t;
+		using base_t = pool_entry_ops_t;
 		using ad_t = alloc_descr_t;
 		using ad_cache_t = alloc_descr_cache_t;
 
-		alloc_descr_pool_cache_t(attrs_t chunk_enum, attrs_t _type) : ops_t(chunk_enum), type{_type} {}
+		alloc_descr_pool_cache_t(attrs_t chunk_enum, attrs_t _type) : base_t(chunk_enum), type{_type} {}
 
 	private:
 		void check_descr(ad_t* descr) const {
 			assert(descr);
-			assert(descr->chunk_size == ops_t::get_chunk_size_enum());
+			assert(descr->chunk_size == base_t::get_chunk_size_enum());
 			assert(descr->type == get_type());
 		}
 
 	public:
-		next_pool_params_t get_next_pool_params(attrs_t min_pools, attrs_t max_pools) const {
-			return ops_t::get_next_pool_params(pools, min_pools, max_pools);
-		}
-
 		void insert_free(ad_t* descr) {
 			check_descr(descr);
 			free_pools.insert(descr);
@@ -392,9 +416,17 @@ namespace cuw::mem {
 			check_descr(descr);
 			alloc_descr_wrapper_t pool{descr};
 			if (pool.full()) {
-				insert_full(descr);
-			} insert_free(descr);
+				full_pools.insert(descr);
+			} free_pools.insert(descr);
 		}		
+
+		void insert_back(ad_t* descr) {
+			check_descr(descr);
+			alloc_descr_wrapper_t pool{descr};
+			if (pool.full()) {
+				full_pools.insert_back(descr);
+			} free_pools.insert_back(descr);
+		}
 
 		void erase(ad_t* descr) {
 			check_descr(descr);
@@ -413,7 +445,7 @@ namespace cuw::mem {
 		}
 
 		void adopt(alloc_descr_pool_cache_t& another, int first_part) {
-			assert(ops_t::get_chunk_size_enum() == another.get_chunk_size_enum());
+			assert(base_t::get_chunk_size_enum() == another.get_chunk_size_enum());
 			assert(get_type() == another.get_type());
 
 			free_pools.adopt(another.free_pools, first_part);
@@ -424,15 +456,28 @@ namespace cuw::mem {
 
 		// void func(ad_t* descr)
 		template<class func_t>
-		void release_all(func_t func) {
-			free_pools.release_all(func);
-			full_pools.release_all(func);
-			pools = 0;
+		void traverse(func_t func) {
+			free_pools.traverse(func);
+			full_pools.traverse(func);
+		}
+
+		// bool func(ad_t* descr)
+		template<class func_t>
+		int release_all(func_t func) {
+			int released = 0;
+			released += free_pools.release_all(func);
+			released += full_pools.release_all(func);
+			pools -= released;
+			return released;
 		}
 
 		void reset() {
 			free_pools.reset();
 			full_pools.reset();
+		}
+
+		next_pool_params_t get_next_pool_params(attrs_t min_pools, attrs_t max_pools) const {
+			return base_t::get_next_pool_params(pools, min_pools, max_pools);
 		}
 
 		attrs_t get_type() const {
@@ -465,6 +510,11 @@ namespace cuw::mem {
 			base_t::insert(descr);
 		}
 
+		void insert_back(ad_t* descr) {
+			check_descr(descr);
+			base_t::insert_back(descr);
+		}
+
 		void reinsert(ad_t* descr) {
 			check_descr(descr);
 			base_t::reinsert(descr);
@@ -481,8 +531,14 @@ namespace cuw::mem {
 
 		// void func(ad_t* descr)
 		template<class func_t>
-		void release_all(func_t func) {
-			base_t::release_all(func);
+		void traverse(func_t func) {
+			return base_t::traverse(func);
+		}
+
+		// bool func(ad_t* descr)
+		template<class func_t>
+		int release_all(func_t func) {
+			return base_t::release_all(func);
 		}
 
 		void reset() {

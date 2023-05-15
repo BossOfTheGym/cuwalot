@@ -167,28 +167,13 @@ namespace cuw::mem {
 
 		descr_t* acquire(void* data, std::size_t size) {
 			if (auto [ptr, offset] = base_t::acquire(); ptr) {
-				++count;
 				return new (ptr) descr_t { .offset = offset, .size = size, .data = data };
 			} return nullptr;
 		}
 
 		bp_t* release(descr_t* fbd, block_pool_release_mode_t mode) {
-			--count;
 			return base_t::release(fbd, fbd->offset, mode);
 		}
-
-		void adopt(descr_entry_t& another) {
-			base_t::adopt(another);
-			count += another.count;
-			another.count = 0;
-		}
-
-		std::size_t get_count() const {
-			return count;
-		}
-
-	private:
-		std::size_t count{};
 	};
 
 	using free_block_descr_entry_t = descr_entry_t<free_block_descr_t>;
