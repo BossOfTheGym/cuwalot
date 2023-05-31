@@ -214,7 +214,7 @@ namespace cuw::mem {
 			});
 		}
 
-		[[nodiscard]] ad_t* extract(const ad_addr_cache_t& addr_cache, void*p tr, int max_lookups) {
+		[[nodiscard]] ad_t* extract(const ad_addr_cache_t& addr_cache, void* ptr, int max_lookups) {
 			if (ad_t* descr = find(addr_cache, ptr, max_lookups)) {
 				return extract(descr);
 			} return nullptr;

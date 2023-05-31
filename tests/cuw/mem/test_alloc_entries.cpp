@@ -24,7 +24,6 @@ namespace {
 
 		std::size_t curr_descr = 0;
 
-		mem::alloc_descr_addr_cache_t addr_cache;
 		mem::pool_entry_t entry(chunk_enum, chunk_size);
 
 		auto try_create_empty = [&] () {
@@ -33,7 +32,7 @@ namespace {
 				return false;
 			}
 			std::size_t offset = curr_descr++;
-			ad_t* descr = entry.create(addr_cache, &descrs[offset], offset, pool_size, total_chunks, data + offset * pool_size);
+			ad_t* descr = entry.create(&descrs[offset], offset, pool_size, total_chunks, data + offset * pool_size);
 			std::cout << "created descr: " << print_ad_t{descr} << std::endl;
 			return true;
 		};
@@ -64,7 +63,7 @@ namespace {
 				std::abort();
 			}
 			std::cout << "deallocating: " << pretty(chunk) << std::endl;
-			if (ad_t* descr = entry.release(addr_cache, chunk, lookups)) {
+			if (ad_t* descr = entry.release({}, chunk, -1)) {
 				std::cout << "descr " << print_ad_t{descr} << " is now empty" << std::endl;
 			} chunk = nullptr;
 		};
@@ -114,10 +113,11 @@ namespace {
 		std::cout << "final descrs view:" << std::endl << mem_view_t{descrs, sizeof(descrs)} << std::endl;
 
 		std::cout << "releasing all..." << std::endl;
-		entry.release_all(addr_cache, [&] (void* block, std::size_t offset, void* data, std::size_t data_size) {
+		entry.release_all([&] (void* block, std::size_t offset, void* data, std::size_t data_size) {
 			std::cout << "releasing descr: " << pretty(block) << " data: " << print_range_t{data, data_size} << std::endl;
 			std::memset(block, 0xFF, mem::block_align);
 			std::memset(data, 0xFF, data_size);
+			return true;
 		});
 
 		std::cout << "testing finished." << std::endl << std::endl;

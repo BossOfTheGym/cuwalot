@@ -36,11 +36,11 @@ namespace cuw::mem {
 		using ad_t = alloc_descr_t;
 
 		static ad_t* addr_index_to_descr(addr_index_t* addr) {
-			return base_to_obj(addr, ad_t, addr_index);
+			return addr ? base_to_obj(addr, ad_t, addr_index) : nullptr;
 		}
 
 		static ad_t* list_entry_to_descr(alloc_descr_list_t* list) {
-			return base_to_obj(list, ad_t, list_entry);
+			return list ? base_to_obj(list, ad_t, list_entry) : nullptr;
 		}
 
 		// key_ops for tree
@@ -97,6 +97,10 @@ namespace cuw::mem {
 
 		attrs_t get_chunk_size() const {
 			return chunk_size;
+		}
+
+		void set_offset(attrs_t _offset) {
+			offset = _offset;
 		}
 
 		attrs_t get_offset() const {
@@ -262,9 +266,17 @@ namespace cuw::mem {
 		}
 
 		ad_t* find(void* addr, int max_lookups) {
+			if (max_lookups == -1) {
+				return ad_t::list_entry_to_descr(
+					base_t::find([&] (list_entry_t* entry) {
+						return ad_t::list_entry_to_descr(entry)->has_addr(addr);
+					})
+				);
+			}
+
 			auto curr = base_t::begin();
-			auto head = base_t::end();
-			for (int i = 0; curr != head && i < max_lookups; i++, curr++) {
+			auto last = base_t::end();
+			for (int i = 0; curr != last && i < max_lookups; i++, curr++) {
 				if (ad_t* ad = ad_t::list_entry_to_descr(*curr); ad->has_addr(addr)) {
 					return ad;
 				}
@@ -298,9 +310,15 @@ namespace cuw::mem {
 		}
 	};
 
-	// little helper
 	struct alloc_descr_addr_cache_t {
 		using ad_t = alloc_descr_t;
+
+		alloc_descr_addr_cache_t& operator = (alloc_descr_addr_cache_t&& another) noexcept {
+			if (this != &another) {
+				index = std::exchange(another.index, nullptr);
+				count = std::exchange(another.count, 0);
+			} return *this;
+		}
 
 		void insert(ad_t* descr) {
 			++count;
@@ -323,6 +341,18 @@ namespace cuw::mem {
 		void reset() {
 			index = nullptr;
 			count = 0;
+		}
+
+		void adopt(alloc_descr_addr_cache_t& another) {
+			if (count < another.count) {
+				std::swap(count, another.count);
+				std::swap(index, another.index);
+			}
+			bst::traverse_inorder(another.index, [&] (addr_index_t* addr) {
+				index = trb::insert_lb(index, addr, ad_t::addr_ops_t{});
+			});
+			count += another.count;
+			another.reset();
 		}
 
 		std::size_t get_size() const {
@@ -381,6 +411,21 @@ namespace cuw::mem {
 
 		alloc_descr_pool_cache_t(attrs_t chunk_enum, attrs_t _type) : base_t(chunk_enum), type{_type} {}
 
+		alloc_descr_pool_cache_t(const alloc_descr_pool_cache_t&) = delete;
+		alloc_descr_pool_cache_t(alloc_descr_pool_cache_t&& another) noexcept {
+			*this = std::move(another);
+		}
+
+		alloc_descr_pool_cache_t& operator = (const alloc_descr_pool_cache_t&) = delete;
+		alloc_descr_pool_cache_t& operator = (alloc_descr_pool_cache_t&& another) noexcept {
+			if (this != &another) {
+				free_pools = std::move(another.free_pools);
+				full_pools = std::move(another.full_pools);
+				type = std::exchange(another.type, 0);
+				pools = std::exchange(another.pools, 0);
+			} return *this;
+		}
+
 	private:
 		void check_descr(ad_t* descr) const {
 			assert(descr);
@@ -414,6 +459,7 @@ namespace cuw::mem {
 
 		void insert(ad_t* descr) {
 			check_descr(descr);
+			++pools;
 			alloc_descr_wrapper_t pool{descr};
 			if (pool.full()) {
 				full_pools.insert(descr);
@@ -422,6 +468,7 @@ namespace cuw::mem {
 
 		void insert_back(ad_t* descr) {
 			check_descr(descr);
+			++pools;
 			alloc_descr_wrapper_t pool{descr};
 			if (pool.full()) {
 				full_pools.insert_back(descr);

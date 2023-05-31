@@ -499,7 +499,7 @@ namespace cuw::mem {
 
 			smd_t* curr_smd = smd_t::addr_index_to_descr(bst::lower_bound(smd_addr, ptr, smd_t::containing_block_search_t{}));
 			if (!curr_smd || (std::uintptr_t)ptr < (std::uintptr_t)curr_smd->get_start()) {
-				std::abort(); // no contanining sysmem region
+				std::abort(); // no containing sysmem region
 			}
 
 			auto coalesced_block_start = (std::uintptr_t)coalesced_block->get_start();

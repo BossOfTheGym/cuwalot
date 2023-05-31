@@ -59,14 +59,27 @@ namespace cuw::mem {
 			list::split(&entry, first, &part1.entry, &part2.entry);
 		}
 
+		// bool func(entry_t*)
+		template<class func_t>
+		entry_t* find(func_t func) {
+			entry_t* head = &entry;
+			entry_t* curr = head->next;
+			while (curr != head) {
+				if (func(curr)) {
+					return curr;					
+				} curr = curr->next;
+			} return nullptr;
+		}
+
 		// void func(entry_t*)
 		template<class func_t>
 		void traverse(func_t func) {
 			entry_t* head = &entry;
 			entry_t* curr = head->next;
 			while (curr != head) {
+				entry_t* next = curr->next;
 				func(curr);
-				curr = curr->next;
+				curr = next;
 			}
 		}
 
@@ -82,7 +95,7 @@ namespace cuw::mem {
 				entry_t* next = curr->next;
 				if (func(curr)) {
 					list::link(prev, next);
-					++freed;
+					++released;
 				} else {
 					prev = curr;
 				} curr = next;

@@ -207,7 +207,6 @@ namespace cuw::mem {
 			free_entries.adopt(another.free_entries);
 		}
 
-
 		// bool func(bp_t*)
 		template<class func_t>
 		void release_all(func_t func) {
@@ -230,6 +229,22 @@ namespace cuw::mem {
 		using bp_t = block_pool_t;
 		using base_t = block_pool_cache_t;
 
+		block_pool_entry_t() = default;
+
+		block_pool_entry_t(const block_pool_entry_t&) = delete;
+		block_pool_entry_t(block_pool_entry_t&& another) noexcept {
+			*this = std::move(another);
+		}
+
+		block_pool_entry_t& operator = (const block_pool_entry_t&) = delete;
+		block_pool_entry_t& operator = (block_pool_entry_t&& another) noexcept {
+			if (this != & another) {
+				(base_t&)*this = std::move(another);
+				total_capacity = std::exchange(another.total_capacity, 0);
+				count = std::exchange(another.count, 0);
+			} return *this;
+		}
+
 		bp_t* create_pool(void* mem, std::size_t size) {
 			assert(mem);
 			assert(size >= 2 * block_size);
@@ -238,6 +253,7 @@ namespace cuw::mem {
 			std::size_t capacity = std::min<std::size_t>(max_pool_blocks, size / block_size - 1);
 			bp_t* bp = new (mem) bp_t { .size = size, .capacity = capacity, .head = block_pool_head_empty };
 			base_t::insert(bp);
+			total_capacity += capacity;
 			return bp;
 		}
 
@@ -274,6 +290,7 @@ namespace cuw::mem {
 		template<class func_t>
 		void finish_release(bp_t* bp, func_t func) {
 			base_t::erase(bp);
+			total_capacity -= bp->capacity;
 			func(bp->get_data(), bp->get_size());
 		}
 
@@ -294,7 +311,12 @@ namespace cuw::mem {
 			return count;
 		}
 
+		std::size_t get_total_capacity() const {
+			return total_capacity;
+		}
+
 	private:
 		std::size_t count{};
+		std::size_t total_capacity{};
 	};
 }
