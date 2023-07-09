@@ -60,7 +60,9 @@ namespace {
 		for (int size = 0; size <= 2 * max_pool_chunk_size; size = 2 * size + 1) {
 			ptr = alloc.malloc(size);
 			memset_deadbeef(ptr, size);
-			alloc.free(ptr);
+			if (!alloc.free(ptr)) {
+				std::abort();
+			}
 		}
 
 		// malloc(<any_size>, <any_alignment>)
@@ -69,17 +71,23 @@ namespace {
 				// standart API
 				ptr = alloc.malloc(size, alignment);
 				memset_deadbeef(ptr, size);
-				alloc.free(ptr);
+				if (!alloc.free(ptr)) {
+					std::abort();
+				}
 				// extension API
 				ptr = alloc.malloc(size, alignment);
 				memset_deadbeef(ptr, size);
-				alloc.free(ptr, size, alignment);
+				if (!alloc.free(ptr, size, alignment)) {
+					std::abort();
+				}
 			}
 		}
 
 		// realloc(nullptr, 0)
 		ptr = alloc.realloc(nullptr, 0);
-		alloc.free(ptr);
+		if (!alloc.free(ptr)) {
+			std::abort();
+		}
 
 		// realloc(<any_alloc>, <any_size>)
 		for (int old_size = 0; old_size <= 2 * max_pool_chunk_size; old_size = 2 * old_size + 1) {
@@ -88,7 +96,9 @@ namespace {
 				memset_deadbeef(ptr, old_size);
 				ptr = alloc.realloc(ptr, new_size);
 				memset_deadbeef(ptr, new_size);
-				alloc.free(ptr);
+				if (!alloc.free(ptr)) {
+					std::abort();
+				}
 			}
 		}
 		
@@ -98,7 +108,9 @@ namespace {
 				for (int alignment = 1; alignment <= max_alignment; alignment *= 2) {
 					ptr = alloc.realloc(nullptr, old_size, new_size, alignment);
 					memset_deadbeef(ptr, new_size);
-					alloc.free(ptr, new_size, alignment);
+					if (!alloc.free(ptr, new_size, alignment)) {
+						std::abort();
+					}
 				}
 			}
 		}
@@ -111,7 +123,9 @@ namespace {
 					memset_deadbeef(ptr, old_size);
 					ptr = alloc.realloc(ptr, old_size, new_size, alignment);
 					memset_deadbeef(ptr, new_size);
-					alloc.free(ptr, new_size, alignment);
+					if (!alloc.free(ptr, new_size, alignment)) {
+						std::abort();
+					}
 				}
 			}
 		}
@@ -124,13 +138,17 @@ namespace {
 					memset_deadbeef(ptr, old_size);
 					ptr = alloc.realloc(ptr, old_size, new_size, alignment);
 					memset_deadbeef(ptr, new_size);
-					alloc.free(ptr);
+					if (!alloc.free(ptr)) {
+						std::abort();
+					}
 				}
 			}
 		}
 
 		// free(nullptr)
-		alloc.free(nullptr);
+		if (!alloc.free(nullptr)) {
+			std::abort();
+		}
 
 		std::cout << "testing finished" << std::endl;
 		return 0;
@@ -170,7 +188,10 @@ namespace {
 				if (std::memcmp(allocations[i], deadbeef.data(), size) != 0) {
 					std::cerr << "invalid check value" << std::endl;
 					std::abort();
-				} alloc.free(allocations[i], size, alignment);
+				}
+				if (!alloc.free(allocations[i], size, alignment)) {
+					std::abort();
+				}
 			}
 		};
 
@@ -270,7 +291,9 @@ namespace {
 				int index = gen.gen(allocations.size());
 				auto& allocation = allocations[index];
 				std::cout << "deallocating " << allocation << std::endl;
-				alloc.free(allocation.ptr, allocation.size, allocation.alignment);
+				if (!alloc.free(allocation.ptr, allocation.size, allocation.alignment)) {
+					std::abort();
+				}
 				allocations[index] = allocations.back();
 				allocations.pop_back();
 				std::cout << "successfully deallocated memory" << std::endl;
@@ -316,7 +339,9 @@ namespace {
 		}
 
 		for (auto& [ptr, size, align] : allocations) {
-			alloc.free(ptr, size, align);
+			if (!alloc.free(ptr, size, align)) {
+				std::abort();
+			}
 		}
 
 		std::cout << "testing finished" << std::endl;
