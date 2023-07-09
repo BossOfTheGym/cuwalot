@@ -7,6 +7,13 @@
 #include "alloc_wrappers.hpp"
 
 namespace cuw::mem {
+	struct released_status_t {
+		using ad_t = alloc_descr_t;
+
+		ad_t* ad{};
+		bool ptr_released{};
+	};
+
 	class basic_pool_entry_t : protected alloc_descr_pool_cache_t {
 	public:
 		using base_t = alloc_descr_pool_cache_t;
@@ -55,30 +62,25 @@ namespace cuw::mem {
 		}
 
 		template<class wrapper_t>
-		[[nodiscard]] ad_t* release(const ad_addr_cache_t& addr_cache, void* ptr, int cache_lookups) {
+		[[nodiscard]] released_status_t release(const ad_addr_cache_t& addr_cache, void* ptr, int cache_lookups) {
 			if (ad_t* descr = find(addr_cache, ptr, cache_lookups)) {
 				return release<wrapper_t>(ptr, descr);
-			} std::abort();
+			} return {};
 		}
 
 		template<class wrapper_t>
-		[[nodiscard]] ad_t* release(void* ptr, ad_t* descr) {
+		[[nodiscard]] released_status_t release(void* ptr, ad_t* descr) {
 			wrapper_t pool(descr, base_t::get_chunk_size_enum(), alignment);
 
 			assert(!pool.empty());
 			
 			pool.release_chunk(ptr);
 			base_t::reinsert_free(descr);
-			return pool.empty() ? descr : nullptr;
+			return {pool.empty() ? descr : nullptr, true};
 		}
 
-		// bool func(void* block, attrs_t offset, void* data, attrs_t size)
-		template<class func_t>
-		bool finish_release(ad_t* descr, func_t func) {
-			if (func(descr, descr->get_offset(), descr->get_data(), descr->get_size())) {
-				base_t::erase(descr);
-				return true;
-			} return false;
+		void finish_release(ad_t* descr) {
+			base_t::erase(descr);
 		}
 
 		// void func(ad_t* descr)
@@ -141,11 +143,11 @@ namespace cuw::mem {
 			return base_t::template acquire<wrapper_t>();
 		}
 
-		[[nodiscard]] ad_t* release(const ad_addr_cache_t& addr_cache, void* ptr, int cache_lookups) {
+		[[nodiscard]] released_status_t release(const ad_addr_cache_t& addr_cache, void* ptr, int cache_lookups) {
 			return base_t::template release<wrapper_t>(addr_cache, ptr, cache_lookups);
 		}
 
-		[[nodiscard]] ad_t* release(void* ptr, ad_t* descr) {
+		[[nodiscard]] released_status_t release(void* ptr, ad_t* descr) {
 			return base_t::template release<wrapper_t>(ptr, descr);
 		}
 	};
@@ -182,22 +184,15 @@ namespace cuw::mem {
 		}
 
 		[[nodiscard]] ad_t* release(const ad_addr_cache_t& addr_cache, void* ptr, int max_lookups) {
-			if (ad_t* descr = find(addr_cache, ptr, max_lookups)) {
-				return descr;
-			} std::abort();
+			return find(addr_cache, ptr, max_lookups);
 		}
 
 		[[nodiscard]] ad_t* release(ad_t* descr) {
 			return descr;
 		}
 
-		// bool func(void* block, attrs_t offset, void* data, attrs_t size)
-		template<class func_t>
-		bool finish_release(ad_t* descr, func_t func) {
-			if (func(descr, descr->get_offset(), descr->get_data(), descr->get_size())) {
-				base_t::erase(descr);
-				return true;
-			} return false;
+		void finish_release(ad_t* descr) {
+			base_t::erase(descr);
 		}
 
 		// void func(ad_t* descr)

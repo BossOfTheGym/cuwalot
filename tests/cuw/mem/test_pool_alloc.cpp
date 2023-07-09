@@ -96,7 +96,7 @@ namespace {
 		for (int old_size = 0; old_size <= 2 * max_pool_chunk_size; old_size = 2 * old_size + 1) {
 			for (int new_size = 0; new_size <= 2 * max_pool_chunk_size; new_size = 2 * new_size + 1) {
 				for (int alignment = 1; alignment <= max_alignment; alignment *= 2) {
-					ptr = alloc.realloc(nullptr, old_size, alignment, new_size);
+					ptr = alloc.realloc(nullptr, old_size, new_size, alignment);
 					memset_deadbeef(ptr, new_size);
 					alloc.free(ptr, new_size, alignment);
 				}
@@ -109,7 +109,7 @@ namespace {
 				for (int alignment = 1; alignment <= max_alignment; alignment *= 2) {
 					ptr = alloc.malloc(old_size, alignment);
 					memset_deadbeef(ptr, old_size);
-					ptr = alloc.realloc(ptr, old_size, alignment, new_size);
+					ptr = alloc.realloc(ptr, old_size, new_size, alignment);
 					memset_deadbeef(ptr, new_size);
 					alloc.free(ptr, new_size, alignment);
 				}
@@ -122,7 +122,7 @@ namespace {
 				for (int alignment = 1; alignment <= max_alignment; alignment *= 2) {
 					ptr = alloc.malloc(old_size, alignment);
 					memset_deadbeef(ptr, old_size);
-					ptr = alloc.realloc(ptr, old_size, alignment, new_size);
+					ptr = alloc.realloc(ptr, old_size, new_size, alignment);
 					memset_deadbeef(ptr, new_size);
 					alloc.free(ptr);
 				}
@@ -286,7 +286,7 @@ namespace {
 				std::size_t new_size = gen.gen(max_req_alloc_size + 1);
 				auto& allocation = allocations[index];
 				std::cout << "reallocating memory " << allocation << " to size " << new_size << std::endl;
-				if (void* ptr = alloc.realloc(allocation.ptr, allocation.size, allocation.alignment, new_size)) {
+				if (void* ptr = alloc.realloc(allocation.ptr, allocation.size, new_size, allocation.alignment)) {
 					allocation.ptr = ptr;
 					allocation.size = new_size;
 					std::cout << "successfully reallocated memory to " << allocation << std::endl;

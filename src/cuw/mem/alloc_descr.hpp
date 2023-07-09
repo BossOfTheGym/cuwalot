@@ -371,6 +371,10 @@ namespace cuw::mem {
 	class pool_entry_ops_t {
 	public:
 		pool_entry_ops_t(attrs_t _chunk_enum = chunk_size_empty) : chunk_enum{_chunk_enum} {}
+		pool_entry_ops_t(pool_entry_ops_t&&) noexcept = default;
+		pool_entry_ops_t(const pool_entry_ops_t&) = default;
+		pool_entry_ops_t& operator=(pool_entry_ops_t&&) noexcept = default;
+		pool_entry_ops_t& operator=(const pool_entry_ops_t&) = default;
 
 		// constraint resolution order (each constraint can violate previous constraints)
 		// 1. pools power
@@ -418,12 +422,12 @@ namespace cuw::mem {
 
 		alloc_descr_pool_cache_t& operator = (const alloc_descr_pool_cache_t&) = delete;
 		alloc_descr_pool_cache_t& operator = (alloc_descr_pool_cache_t&& another) noexcept {
-			if (this != &another) {
-				free_pools = std::move(another.free_pools);
-				full_pools = std::move(another.full_pools);
-				type = std::exchange(another.type, 0);
-				pools = std::exchange(another.pools, 0);
-			} return *this;
+			(base_t&)*this = std::move(another);
+			free_pools = std::move(another.free_pools);
+			full_pools = std::move(another.full_pools);
+			std::swap(type, another.type);
+			std::swap(pools, another.pools);
+			return *this;
 		}
 
 	private:

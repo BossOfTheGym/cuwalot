@@ -304,8 +304,8 @@ namespace cuw::mem {
 	template<class traits_t>
 	struct pool_alloc_traits_t : public traits_t {
 		static constexpr std::size_t alloc_min_pool_power = impl::alloc_min_pool_specs_t<traits_t>::alloc_min_pool_power;
-		static constexpr std::size_t alloc_min_pool_size = impl::alloc_min_pool_specs_t<traits_t>::alloc_min_pool_size;
 		static constexpr std::size_t alloc_max_pool_power = impl::alloc_max_pool_specs_t<traits_t>::alloc_max_pool_power;
+		static constexpr std::size_t alloc_min_pool_size = impl::alloc_min_pool_specs_t<traits_t>::alloc_min_pool_size;
 		static constexpr std::size_t alloc_max_pool_size = impl::alloc_max_pool_specs_t<traits_t>::alloc_max_pool_size;
 		static constexpr std::size_t alloc_base_alignment = impl::alloc_base_alignment_t<traits_t>::alloc_base_alignment;
 

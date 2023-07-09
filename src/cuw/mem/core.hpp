@@ -18,6 +18,10 @@
 #include <cuw/utils/list.hpp>
 #include <cuw/utils/trb_node.hpp>
 
+// TODO : get rid of pool_chunk_size_t
+// TODO : shitty codestyle
+// TODO : move/copy constructors, see cppguidelines
+
 namespace cuw::mem {
 	using ptr_t = std::uintptr_t;
 	using attrs_t = std::uint64_t;

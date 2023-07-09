@@ -63,7 +63,7 @@ namespace {
 				std::abort();
 			}
 			std::cout << "deallocating: " << pretty(chunk) << std::endl;
-			if (ad_t* descr = entry.release({}, chunk, -1)) {
+			if (auto [descr, ptr_released] = entry.release({}, chunk, -1); descr) {
 				std::cout << "descr " << print_ad_t{descr} << " is now empty" << std::endl;
 			} chunk = nullptr;
 		};
