@@ -36,99 +36,220 @@ namespace {
 	// - - allocated(used) block
 	// + - allocated(managed by fbd) block
 
-	// TODO
 	int test_alloc1() {
-		std::cout << "testing allocation/deallocation(1)" << std::endl;
-
 		using page_alloc_t = mem::page_alloc_t<basic_alloc_t<1, 4, 2, 10>>;
 
-		page_alloc_t alloc(block_size_t{16}, block_size_t{1});
+		std::cout << "testing allocation/deallocation(1)" << std::endl;
 
 		// 16 blocks
+		page_alloc_t alloc(block_size_t{16}, block_size_t{1});
+
+		void* start = alloc.get_alloc_ranges().begin()->ptr;
+		void* allocated{};
+
 		// uuuuuuuuuuuuuuuu alloc 10
-		// sx----------uuuu dealloc 2
-		// sx++--------fxoo dealloc 2
-		// sx++--++----fxxo dealloc 2
-		// sx++--++--++fxxx dealloc 2
-		// sx++++++--++fxxo dealloc 2
+		allocated = alloc.allocate(block_size_t{10});
+		check_allocation(allocated, block_mem_t{start, 2});
+
+		// sx----------uuuu deallocate 2
+		alloc.deallocate(block_mem_t{start, 2}, block_size_t{2});
+
+		// sx++--------fxoo deallocate 2
+		alloc.deallocate(block_mem_t{start, 6}, block_size_t{2});
+
+		// sx++--++----fxxo deallocate 2
+		alloc.deallocate(block_mem_t{start, 10}, block_size_t{2});
+
+		// sx++--++--++fxxx deallocate 2
+		alloc.deallocate(block_mem_t{start, 4}, block_size_t{2});
+
+		// sx++++++--++fxxo deallocate 2
+		alloc.deallocate(block_mem_t{start, 8}, block_size_t{2});
+
 		// uuuuuuuuuuuuuuuu
+		alloc.release_mem(); // nothing must happen
 
 		std::cout << "testing allocation/deallocation finished" << std::endl;
 
 		return 0;
 	}
 
-	// TODO
 	int test_alloc2() {
+		using page_alloc_t = mem::page_alloc_t<basic_alloc_t<1, 10, 4, 4>>;
+
 		std::cout << "testing allocation/deallocation(2)" << std::endl;
 
-		using page_alloc_t = mem::page_alloc_t<basic_alloc_t<1, 3, 3, 4>>;
-
 		// 32 blocks
+		page_alloc_t alloc(block_size_t{32}, block_size_t{1});
+
+		void* start = alloc.get_alloc_ranges().begin()->ptr;
+		void* allocated{};
+
 		// uuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuu alloc 6
+		allocated = alloc.allocate(block_size_t{6});
+		check_allocation(allocated, block_mem_t{start, 4});
+
 		// sxoo------uuuuuuuuuuuuuuuuuuuuuu alloc 6
+		allocated = alloc.allocate(block_size_t{6});
+		check_allocation(allocated, block_mem_t{start, 10});
+
 		// sxxo------------uuuuuuuuuuuuuuuu alloc 6
-		// sxxx------------------uuuuuuuuuu dealloc 1
-		// sxxx+-----------------fxoooooooo dealloc 1
-		// sxxx+-+---------------fxxooooooo dealloc 3
-		// sxxx+-+-+++-----------fxxxoooooo dealloc 1
-		// sxxx+-+-+++-+---------fxxxxooooo dealloc 3
-		// sxxx+-+-+++-+-+++-----fxxxxxoooo dealloc 1
-		// sxxx+-+-+++-+-+++-+---fxxxxxxooo dealloc 2
-		// sxxx+-+-+++-+-+++-+-++fxxxxxxxoo dealloc 1
-		// sxxx+++-+++-+-+++-+-++fxxxxxxooo dealloc 1
-		// sxxouuuuuu+-+-+++-+-++fxxxxxoooo dealloc 1
-		// sxxouuuuuu+++-+++-+-++fxxxxxoooo dealloc 1
-		// sxoouuuuuuuuuuuu+-+-++fxxxoooooo dealloc 1
-		// sxoouuuuuuuuuuuu+++-++fxxooooooo dealloc 1
+		allocated = alloc.allocate(block_size_t{6});
+		check_allocation(allocated, block_mem_t{start, 16});
+
+		// sxxx------------------uuuuuuuuuu deallocate 1
+		alloc.deallocate(block_mem_t{start, 4}, block_size_t{1});
+
+		// sxxx+-----------------fxoooooooo deallocate 1
+		alloc.deallocate(block_mem_t{start, 6}, block_size_t{1});
+
+		// sxxx+-+---------------fxxooooooo deallocate 3
+		alloc.deallocate(block_mem_t{start, 8}, block_size_t{3});
+
+		// sxxx+-+-+++-----------fxxxoooooo deallocate 1
+		alloc.deallocate(block_mem_t{start, 12}, block_size_t{1});
+
+		// sxxx+-+-+++-+---------fxxxxooooo deallocate 3
+		alloc.deallocate(block_mem_t{start, 14}, block_size_t{3});
+
+		// sxxx+-+-+++-+-+++-----fxxxxxoooo deallocate 1
+		alloc.deallocate(block_mem_t{start, 18}, block_size_t{1});
+
+		// sxxx+-+-+++-+-+++-+---fxxxxxxooo deallocate 2
+		alloc.deallocate(block_mem_t{start, 20}, block_size_t{2});
+
+		// sxxx+-+-+++-+-+++-+-++fxxxxxxxoo deallocate 1
+		alloc.deallocate(block_mem_t{start, 5}, block_size_t{1});
+
+		// sxxx+++-+++-+-+++-+-++fxxxxxxooo deallocate 1
+		alloc.deallocate(block_mem_t{start, 7}, block_size_t{1});
+
+		// sxxouuuuuu+-+-+++-+-++fxxxxxoooo deallocate 1
+		alloc.deallocate(block_mem_t{start, 11}, block_size_t{1});
+
+		// sxxouuuuuu+++-+++-+-++fxxxxxoooo deallocate 1
+		alloc.deallocate(block_mem_t{start, 13}, block_size_t{1});
+
+		// sxoouuuuuuuuuuuu+-+-++fxxxoooooo deallocate 1
+		alloc.deallocate(block_mem_t{start, 17}, block_size_t{1});
+
+		// sxoouuuuuuuuuuuu+++-++fxxooooooo deallocate 1
+		alloc.deallocate(block_mem_t{start, 19}, block_size_t{1});
+
 		// uuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuu alloc 6
+		allocated = alloc.allocate(block_size_t{6});
+		check_allocation(allocated, block_mem_t{start, 4});
+
 		// sxoo------uuuuuuuuuuuuuuuuuuuuuu alloc 6
+		allocated = alloc.allocate(block_size_t{6});
+		check_allocation(allocated, block_mem_t{start, 10});
+
 		// sxxo------------uuuuuuuuuuuuuuuu alloc 6
-		// sxxx------------------uuuuuuuuuu dealloc 2
-		// sxxx++----------------fxoooooooo dealloc 2 
-		// sxxx++--------------++fxxooooooo dealloc 2
-		// sxxx++--++----------++fxxxoooooo dealloc 2
-		// sxxx++--++------++--++fxxxxooooo dealloc 6
-		// sxxo++--++uuuuuu++--++fxxxxooooo dealloc 2
-		// sxoouuuuuuuuuuuu++--++fxxooooooo dealloc 2
+		allocated = alloc.allocate(block_size_t{6});
+		check_allocation(allocated, block_mem_t{start, 16});
+
+		// sxxx------------------uuuuuuuuuu deallocate 2
+		alloc.deallocate(block_mem_t{start, 4}, block_size_t{2});
+
+		// sxxx++----------------fxoooooooo deallocate 2
+		alloc.deallocate(block_mem_t{start, 20}, block_size_t{2});
+
+		// sxxx++--------------++fxxooooooo deallocate 2
+		alloc.deallocate(block_mem_t{start, 8}, block_size_t{2});
+
+		// sxxx++--++----------++fxxxoooooo deallocate 2
+		alloc.deallocate(block_mem_t{start, 16}, block_size_t{2});
+
+		// sxxx++--++------++--++fxxxxooooo deallocate 6
+		alloc.deallocate(block_mem_t{start, 10}, block_size_t{6});
+
+		// sxxo++--++uuuuuu++--++fxxxxooooo deallocate 2
+		alloc.deallocate(block_mem_t{start, 6}, block_size_t{2});
+
+		// sxoouuuuuuuuuuuu++--++fxxooooooo deallocate 2
+		alloc.deallocate(block_mem_t{start, 18}, block_size_t{2});
+
 		// uuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuu alloc 6
+		allocated = alloc.allocate(block_size_t{6});
+		check_allocation(allocated, block_mem_t{start, 4});
+
 		// sxoo------uuuuuuuuuuuuuuuuuuuuuu alloc 6
+		allocated = alloc.allocate(block_size_t{6});
+		check_allocation(allocated, block_mem_t{start, 10});
+
 		// sxxo------------uuuuuuuuuuuuuuuu alloc 6
-		// sxxx------------------uuuuuuuuuu dealloc 2
-		// sxxx++----------------fxoooooooo dealloc 2 
-		// sxxx++--------------++fxxooooooo dealloc 6
-		// sxxouuuuuu++--------++fxxooooooo dealloc 6
-		// sxxouuuuuu++--++uuuuuufxxooooooo dealloc 1
-		// sxxouuuuuu+++-++uuuuuufxoooooooo dealloc 1
+		allocated = alloc.allocate(block_size_t{6});
+		check_allocation(allocated, block_mem_t{start, 16});
+
+		// sxxx------------------uuuuuuuuuu deallocate 2
+		alloc.deallocate(block_mem_t{start, 4}, block_size_t{2});
+
+		// sxxx++----------------fxoooooooo deallocate 2 
+		alloc.deallocate(block_mem_t{start, 20}, block_size_t{2});
+
+		// sxxx++--------------++fxxooooooo deallocate 6
+		alloc.deallocate(block_mem_t{start, 6}, block_size_t{6});
+
+		// sxxouuuuuu++--------++fxxooooooo deallocate 6
+		alloc.deallocate(block_mem_t{start, 14}, block_size_t{6});
+
+		// sxxouuuuuu++--++uuuuuufxxooooooo deallocate 1
+		alloc.deallocate(block_mem_t{start, 12}, block_size_t{1});
+
+		// sxxouuuuuu+++-++uuuuuufxoooooooo deallocate 1
+		alloc.deallocate(block_mem_t{start, 13}, block_size_t{1});
+
 		// uuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuu
+		alloc.release_mem(); // nothing must happen
 
 		std::cout << "testing allocation/deallocation finished" << std::endl;
 
 		return 0;
 	}
 
-	// TODO
 	int test_realloc() {
-		std::cout << "testing reallocation" << std::endl;
-
 		using page_alloc_t = mem::page_alloc_t<basic_alloc_t<1, 4, 4, 6>>;
 
-		// 20 blocks
-		// uuuuuuuuuuuuuuuuuuuu alloc 6
-		// sxoo------uuuuuuuuuu dealloc 4
-		// sxoo--++++fxoouuuuuu realloc 2,4
-		// sxoo----++fxoouuuuuu realloc 4,6
-		// sxoo------uuuuuuuuuu dealloc 1
-		// sxoo+-----fxoouuuuuu realloc 5,6
-		// sxoouuuuuuuuuu------ dealloc 6
-		// uuuuuuuuuuuuuuuuuuuu
+		std::cout << "testing reallocation" << std::endl;
 
+		// 20 blocks
+		page_alloc_t alloc(block_size_t{20}, block_size_t{1});
+
+		void* start = alloc.get_ranges().begin()->ptr;
+		void* allocated{};
+
+		// uuuuuuuuuuuuuuuuuuuu alloc 6
+		allocated = alloc.allocate(block_size_t{6});
+		check_allocation(allocated, block_mem_t{start, 4});
+
+		// sxoo------uuuuuuuuuu deallocate 4
+		alloc.deallocate(block_mem_t{start, 6}, block_size_t{4});
+
+		// sxoo--++++fxoouuuuuu realloc 2,4
+		allocated = alloc.reallocate(block_mem_t{start, 4}, block_size_t{2}, block_size_t{4});
+		check_allocation(allocated, block_mem_t{start, 4});
+
+		// sxoo----++fxoouuuuuu realloc 4,6
+		allocated = alloc.reallocate(block_mem_t{start, 4}, block_size_t{4}, block_size_t{6});
+		check_allocation(allocated, block_mem_t{start, 4});
+
+		// sxoo------uuuuuuuuuu deallocate 1
+		alloc.deallocate(block_mem_t{start, 4}, block_size_t{1});
+
+		// sxoo+-----fxoouuuuuu realloc 5,6
+		allocated = alloc.reallocate(block_mem_t{start, 5}, block_size_t{5}, block_size_t{6});
+
+		// sxoouuuuuuuuuu------ deallocate 6
+		alloc.deallocate(block_mem_t{start, 14}, block_size_t{6});
+
+		// uuuuuuuuuuuuuuuuuuuu
+		alloc.release_mem(); // nothing must happen
+		
 		std::cout << "testing reallocation finished" << std::endl << std::endl;
 
 		return 0;
 	}
 
-	// TODO
 	int test_adopt() {
 		std::cout << "testing adoption" << std::endl;
 		
@@ -138,32 +259,79 @@ namespace {
 		using alloc_t = mem::page_alloc_t<proxy_alloc_t>;
 
 		// 28 blocks
+		common_alloc_t common_alloc(block_size_t{28}, block_size_t{1});
+		void* start = common_alloc.get_alloc_ranges().begin()->ptr;
+		void* allocated{};
+
+		seq_alloc_t seq_alloc(common_alloc, {
+			alloc_request_t::allocate(block_size_t{3}, block_mem_t{start, 0}), // 1
+			alloc_request_t::allocate(block_size_t{4}, block_mem_t{start, 3}), // 1
+			alloc_request_t::allocate(block_size_t{3}, block_mem_t{start, 11}), // 1
+			alloc_request_t::allocate(block_size_t{4}, block_mem_t{start, 17}), // 1
+			alloc_request_t::allocate(block_size_t{3}, block_mem_t{start, 14}), // 2
+			alloc_request_t::allocate(block_size_t{4}, block_mem_t{start, 7}), // 2
+			alloc_request_t::allocate(block_size_t{4}, block_mem_t{start, 21}), // 2
+			alloc_request_t::allocate(block_size_t{3}, block_mem_t{start, 25}), // 2
+		});
+
+		alloc_t alloc1(seq_alloc);
+		alloc_t alloc2(seq_alloc);
+
 		// ............................
-		// uuuuuuuuuuuuuuuuuuuuuuuuuuuu 1. alloc 4
+		// uuuuuuuuuuuuuuuuuuuuuuuuuuuu 1. alloc 4 (allocates 3,4)
+		allocated = alloc1.allocate(block_size_t{4});
+		check_allocation(allocated, block_mem_t{start, 3});
+
 		// 1..1........................
-		// sxo----uuuuuuuuuuuuuuuuuuuuu 1. dealloc 2
+		// sxo----uuuuuuuuuuuuuuuuuuuuu 1. deallocate 2 (allocates 3)
+		alloc1.deallocate(block_mem_t{start, 5}, block_size_t{2});
+
 		// 1..1.1.....1................
-		// sxx--++uuuufxouuuuuuuuuuuuuu 1. alloc 4
+		// sxx--++uuuufxouuuuuuuuuuuuuu 1. alloc 4 (allocates 4)
+		allocated = alloc1.allocate(block_size_t{4});
+		check_allocation(allocated, block_mem_t{start, 17});
+
 		// 1..1.1.....1.....1..........
-		// sxx--++uuuufxouuu----uuuuuuu 1. dealloc 2
+		// sxx--++uuuufxouuu----uuuuuuu 1. deallocate 2
+		alloc1.deallocate(block_mem_t{start, 19}, block_size_t{2});
+
 		// 1..1.1.....1.....1.1........
-		// sxx--++uuuufxxuuu--++uuuuuuu 2. alloc 4
+		// sxx--++uuuufxxuuu--++uuuuuuu 2. alloc 4 (allocates 3,4)
+		allocated = alloc2.allocate(block_size_t{4});
+		check_allocation(allocated, block_mem_t{start, 7});
+
 		// 1..1.1.2...1..2..1.1........
-		// sxx--++----fxxsxo--++uuuuuuu 2. alloc 4
+		// sxx--++----fxxsxo--++uuuuuuu 2. alloc 4 (allocates 4)
+		allocated = alloc2.allocate(block_size_t{4});
+		check_allocation(allocated, block_mem_t{start, 21});
+
 		// 1..1.1.2...1..2..1.1.2......
-		// sxx--++----fxxsxx--++----uuu 2. dealloc 2
+		// sxx--++----fxxsxx--++----uuu 2. deallocate 2 (allocates 3)
+		alloc2.deallocate(block_mem_t{start, 7}, block_size_t{2});
+
 		// 1..1.1.2.2.1..2..1.1.2...2..
-		// sxx--++++--fxxsxx--++----fxo 2. dealloc 2
+		// sxx--++++--fxxsxx--++----fxo 2. deallocate 2
+		alloc2.deallocate(block_mem_t{start, 21}, block_size_t{2});
+
 		// 1..1.1.2.2.1..2..1.1.2.2.2..
 		// sxx--++++--fxxsxx--++++--fxx
-		//
-		//          1 adopts 2
-		//
-		// sxx--++++--fxxsxx--++++--uuu dealloc 2
-		// sxx--++uuuufxxsxo--++++--uuu dealloc 2
-		// sxx--++uuuufxxuuu--++uuuuuuu dealloc 2
-		// sxx--++uuuufxouuuuuuuuuuuuuu dealloc 2
+		alloc1.adopt(alloc2);
+
+		// sxx--++++--fxxsxx--++++--uuu deallocate 2
+		alloc1.deallocate(block_mem_t{start, 9}, block_size_t{2});
+
+		// sxx--++uuuufxxsxo--++++--uuu deallocate 2
+		alloc1.deallocate(block_mem_t{start, 23}, block_size_t{2});
+
+		// sxx--++uuuufxxuuu--++uuuuuuu deallocate 2
+		alloc1.deallocate(block_mem_t{start, 17}, block_size_t{2});
+
+		// sxx--++uuuufxouuuuuuuuuuuuuu deallocate 2
+		alloc1.deallocate(block_mem_t{start, 3}, block_size_t{2});
+
 		// uuuuuuuuuuuuuuuuuuuuuuuuuuuu
+		alloc1.release_mem(); // nothing must happen
+		alloc2.release_mem(); // nothing must happen
 
 		std::cout << "adoption test successfully finished" << std::endl << std::endl;
 
@@ -182,7 +350,7 @@ namespace {
 	int test_random_stuff() {
 		std::cout << "testing by random allocations/dellocations..." << std::endl;
 
-		constexpr int total_commands = 1 << 8;
+		constexpr int total_commands = 1 << 14;
 		constexpr std::size_t min_alloc_size = block_size_t{1};
 		constexpr std::size_t max_alloc_size = block_size_t{1 << 10};
 

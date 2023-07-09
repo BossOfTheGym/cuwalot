@@ -405,7 +405,7 @@ namespace cuw::mem {
 			bool consumes_right{};
 		};
 
-		// O(2*log(n)) at worst
+		// O(2 * log(n)) at worst
 		coalesce_info_t get_coalesce_info(void* ptr, std::size_t size) {
 			assert(ptr);
 			assert(is_aligned(size, page_size));
@@ -423,12 +423,13 @@ namespace cuw::mem {
 			fbd_t* ins_pos = fbd_t::addr_index_to_descr(ins_pos_node);
 			fbd_t* right = fbd_t::addr_index_to_descr(lb_node);
 
+			fbd_t* left;
 			addr_index_t* left_node;
 			if (!lb_node || lb_node != ins_pos_node) {
 				left_node = ins_pos_node;
 			} else {
 				left_node = bst::predecessor(lb_node);
-			} fbd_t* left = fbd_t::addr_index_to_descr(left_node);
+			} left = fbd_t::addr_index_to_descr(left_node);
 
 			fbd_t dummy = { .size = size, .data = ptr };
 			if (left && fbd_t::overlaps(&dummy, left) || right && fbd_t::overlaps(&dummy, right)) {
@@ -441,7 +442,6 @@ namespace cuw::mem {
 			return {left, right, ins_pos, consumes_left, consumes_right};
 		}
 
-		// impl function
 		// fbd can be dummy (created on stack)
 		//
 		// if we dont require an fbd allocation(is_dummy can be true):
@@ -455,12 +455,12 @@ namespace cuw::mem {
 		// insert_free_block(info, block)
 		//
 		// block must not be in index before function call
-		// O(4 * log(n)) at worst (insert_lb counts as 2 operations)
-		// returns coalesced block, block has already been inserted into the addr index but not into the size index
-		// so insert it into the size index at the end of operation
+		// O(3 * log(n)) at worst
+		// returns coalesced block, block is already in the addr index but not in the size index so insert it into the size index when required
 		fbd_t* coalesce_free_block(const coalesce_info_t& info, fbd_t* block, bool is_dummy) {
 			fbd_t* coalesced_block = block;
 			if (info.consumes_left) {
+				// block coalesces with the left block so we remove left block from the size index but keep in the addr index
 				fbd_size = trb::remove(fbd_size, &info.left->size_index);
 				info.left->extend_right(coalesced_block->size);
 				if (!is_dummy) {
@@ -469,21 +469,25 @@ namespace cuw::mem {
 			}
 			
 			if (info.consumes_right) {
+				// block coalesces with the right block so we remove right block from the size index but keep in the addr index
 				fbd_size = trb::remove(fbd_size, &info.right->size_index);
 				info.right->extend_left(coalesced_block->size);
 				if (info.consumes_left) {
+					// is already coalesced with the left block then remove right block from the addr index
 					fbd_addr = trb::remove(fbd_addr, &coalesced_block->addr_index);
 					free_fbd(coalesced_block);
 				} coalesced_block = info.right;
 			}
 
-			if (info.requires_fbd_alloc()) { // block must not be dummy, block is not in addr index, insert
+			if (info.requires_fbd_alloc()) {
+				// block must not be dummy, block is not in addr index, insert
+				// block does not coalesce with any of the blocks so we must insert in into the addr index
 				assert(!is_dummy);
 				fbd_addr = trb::insert_lb_hint(fbd_addr, &coalesced_block->addr_index, &info.ins_pos->addr_index, fbd_t::addr_index_search_t{});
 			} return coalesced_block;
 		}
 
-		// O(13*log(n) + walk), (insert_lb counts as 2 operations)
+		// O(12 * log(n) + walk), (insert_lb counts as 2 operations)
 		void insert_free_block(void* ptr, std::size_t size) {
 			fbd_t* coalesced_block = nullptr;
 			coalesce_info_t info = get_coalesce_info(ptr, size);
@@ -497,6 +501,7 @@ namespace cuw::mem {
 				coalesced_block = coalesce_free_block(info, &dummy, true);
 			}
 
+			// it always falls into the appropriate smd according to our algorithm
 			smd_t* curr_smd = smd_t::addr_index_to_descr(bst::lower_bound(smd_addr, ptr, smd_t::containing_block_search_t{}));
 			if (!curr_smd || (std::uintptr_t)ptr < (std::uintptr_t)curr_smd->get_start()) {
 				std::abort(); // no containing sysmem region
@@ -510,15 +515,17 @@ namespace cuw::mem {
 				auto curr_smd_start = (std::uintptr_t)curr_smd->get_start();
 				auto curr_smd_end = (std::uintptr_t)curr_smd->get_end();
 
-				auto a = std::max(coalesced_block_start, curr_smd_start);
-				auto b = std::min(coalesced_block_end, curr_smd_end);
+				auto overlap_start = std::max(coalesced_block_start, curr_smd_start);
+				auto overlap_end = std::min(coalesced_block_end, curr_smd_end);
 
-				smd_t* next_smd = smd_t::addr_index_to_descr(bst::successor(&curr_smd->addr_index));
-				if (a == curr_smd_start && b == curr_smd_end) {
-					cut_start = std::min(cut_start, a);
-					cut_end = std::max(cut_end, b);
+				smd_t* next_smd = smd_t::addr_index_to_descr(bst::successor(&curr_smd->addr_index)); // curr_smd can be freed so we get it beforehand
+				if (overlap_start == curr_smd_start && overlap_end == curr_smd_end) {
+					cut_start = std::min(cut_start, overlap_start);
+					cut_end = std::max(cut_end, overlap_end);
 					free_memory(curr_smd);
-				} curr_smd = next_smd;
+				}
+				
+				curr_smd = next_smd;
 			}
 
 			if (cut_start >= cut_end) {
@@ -528,25 +535,25 @@ namespace cuw::mem {
 			}
 
 			if (cut_start != coalesced_block_start) {
-				// shrinking block so has the same size as the first part
+				// shrinking block so it has the same size as the first part
 				coalesced_block->shrink_right(coalesced_block_end - cut_start);
-				fbd_size = trb::insert_lb(fbd_size, &coalesced_block->size_index, fbd_t::size_index_search_t{});
+				fbd_size = trb::insert_lb(fbd_size, &coalesced_block->size_index, fbd_t::size_index_search_t{}); // block already in the size index
 
 				if (cut_end != coalesced_block_end) {
-					// inserting the second part
+					// inserting the second part both into the size index and the addr index
 					if (fbd_t* fbd = alloc_fbd((void*)cut_end, coalesced_block_end - cut_end)) {
 						fbd_addr = trb::insert_lb(fbd_addr, &fbd->addr_index, fbd_t::addr_index_search_t{});
 						fbd_size = trb::insert_lb(fbd_size, &fbd->size_index, fbd_t::size_index_search_t{});
 					} else {
-						std::abort();
+						std::abort(); // we cannot allocate a fbd
 					}
 				}
 			} else if (cut_end != coalesced_block_end) {
 				// first part is missing, inserting the second part
-				coalesced_block->shrink_left(cut_end - cut_start);
+				coalesced_block->shrink_left(cut_end - coalesced_block_start);
 				fbd_size = trb::insert_lb(fbd_size, &coalesced_block->size_index, fbd_t::size_index_search_t{});
 			} else {
-				// no parts, completely remove block from the index
+				// cut whole block => no parts, completely remove block from the index
 				fbd_addr = trb::remove(fbd_addr, &coalesced_block->addr_index);
 				free_fbd(coalesced_block);
 			}
