@@ -41,6 +41,7 @@ namespace cuw::mem {
 			}
 		};
 
+		// TODO : fuck this
 		template<class pool_type_t, auto first_chunk, auto last_chunk>
 		class pools_t {
 		public:
@@ -108,6 +109,7 @@ namespace cuw::mem {
 			pool_type_t pools[total_pools] = {};
 		};
 
+		// TODO : fuck this
 		template<class bin_type_t, attrs_t total_bins>
 		class raw_bins_t {
 		public:

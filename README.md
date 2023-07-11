@@ -1,19 +1,20 @@
 # cuwalot
 Tree-based memory allocator. Utilizes red-black trees. The best allocator in the universe that is... under construction yet.
 
-# TODO
-- page_alloc tests
-- block_pool_t: get_count
-- pool_alloc: densening of alloc_descr
-- rework alloc_entries + alloc_addr_cache
-
-**complete TODO**
-- multithreading
+**TODO**
+- change shitty codestyle
+- remove design flaws
+- rework cache_alloc
+- add should_free_smd flag as dirty greedy hacky optimization
+- remove stupid enums
+- multithreading, rework pool_alloc
+  - remove stupid allocation size check
+  - fuck standart API, remove it completely
+  - add bins instead of pools & bins or... whatever, yeah, unify the storage and and locking possibilities there
+  - add option to add/remove locks for
+    - pool_alloc
+	- page_alloc
 - README description
-- test allocator
-- testing in release mode
 - decent unit testing
 - Doxygen
 - cmake install rules
-
-**somewhat good TODO**
