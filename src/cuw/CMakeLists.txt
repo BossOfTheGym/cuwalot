@@ -22,6 +22,8 @@ set(cuw_sources ${cuw_sources}
     mem/page_alloc.hpp
     mem/pool_alloc.hpp
     mem/sys_alloc.hpp
+    mem/config.hpp
+    mem/cuwalot.hpp mem/cuwalot.cpp
 )
 
 # TODO : maybe I should configure SHARED/STATIC?

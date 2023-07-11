@@ -36,7 +36,7 @@ namespace cuw::mem {
 			assert(new_size != 0);
 			void* new_ptr = allocate(new_size);
 			if (new_ptr) {
-				memcpy(new_ptr, old_ptr, std::min(old_size, new_size));
+				std::memcpy(new_ptr, old_ptr, std::min(old_size, new_size));
 				deallocate(old_ptr, old_size);
 				return new_ptr;
 			} return nullptr;

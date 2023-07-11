@@ -134,6 +134,7 @@ namespace cuw::mem {
 
 	public:
 		void* allocate(std::size_t size) {
+			size = align_value(size, base_t::get_page_size()); // TODO : design flaw??? or leave it for safety
 			if (void* ptr = allocate_from_slots(size)) {
 				return ptr;
 			} return base_t::allocate(size);
@@ -145,7 +146,7 @@ namespace cuw::mem {
 
 		void* reallocate(void* old_ptr, std::size_t old_size, std::size_t new_size) {
 			if (void* new_ptr = allocate_from_slots(new_size)) {
-				memcpy(new_ptr, old_ptr, old_size);
+				std::memcpy(new_ptr, old_ptr, old_size);
 				deallocate(old_ptr, old_size);
 				return new_ptr;
 			} return base_t::reallocate(old_ptr, old_size, new_size);
@@ -164,7 +165,7 @@ namespace cuw::mem {
 						return {ptr, true_size};
 					} return base_t::allocate(size);
 				} default: {
-					abort();
+					std::abort();
 				}
 			}
 		}

@@ -284,7 +284,7 @@ namespace cuw::mem {
 
 	template<class traits_t>
 	struct page_alloc_traits_t : public traits_t {
-		static constexpr bool use_resolved_page = impl::use_resolved_page_size_t<traits_t>::use_resolved_page_size;
+		static constexpr bool use_resolved_page_size = impl::use_resolved_page_size_t<traits_t>::use_resolved_page_size;
 
 		static constexpr std::size_t alloc_page_size = impl::alloc_page_size_t<traits_t>::alloc_page_size;
 		static constexpr std::size_t alloc_block_pool_size = impl::alloc_block_pool_size_t<traits_t>::alloc_block_pool_size;

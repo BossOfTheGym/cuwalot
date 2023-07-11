@@ -366,6 +366,7 @@ namespace cuw::mem {
 				return nullptr;
 			}
 
+			// TODO : calculate it here, remove get_next_pool_params
 			auto [pool_size, pool_capacity] = pool.get_next_pool_params(base_t::alloc_min_pool_power, base_t::alloc_max_pool_power);
 
 			void* pool_data = base_t::allocate(pool_size);
@@ -555,14 +556,14 @@ namespace cuw::mem {
 			assert(size != 0);
 
 			if (std::size_t pool_alignment = adjust_pool_alignment(alignment)) {
-				std::size_t size_aligned = align_value(size, alignment);
+				std::size_t size_aligned = align_value(size, pool_alignment);
 				if (auto pool = pools.find(size_aligned); pool != pools.end()) {
 					return free_pool(*pool, ptr);
 				}
 			}
 
 			if (std::size_t raw_alignment = adjust_raw_alignment(alignment)) {
-				std::size_t size_aligned = align_value(size, alignment);
+				std::size_t size_aligned = align_value(size, raw_alignment);
 				return free_raw(ptr, size_aligned);
 			}
 

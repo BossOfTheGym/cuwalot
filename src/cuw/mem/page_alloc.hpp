@@ -109,7 +109,6 @@ namespace cuw::mem {
 
 	static_assert(do_fits_block<free_block_descr_t>);
 
-	// memory_used(48): how much memory from this range is used, pretty weak guarantee 
 	struct alignas(block_align) sysmem_descr_t {
 		using smd_t = sysmem_descr_t;
 
@@ -182,7 +181,7 @@ namespace cuw::mem {
 	// all allocations will be multiple of page_size
 	// size is now size in bytes
 	// size cannot be less than page_size or block_size
-	// O(13 * log(n) + walk) complexity at its finest on deallocation
+	// O(12 * log(n) + walk) complexity at its finest on deallocation
 	template<class basic_alloc_t>
 	class page_alloc_t : public basic_alloc_t {
 	public:
@@ -500,6 +499,10 @@ namespace cuw::mem {
 				fbd_t dummy{ .size = size, .data = ptr };
 				coalesced_block = coalesce_free_block(info, &dummy, true);
 			}
+
+			// TODO: HEHEHEH! DIRTY OPTIMIZATION!
+			//fbd_size = trb::insert_lb(fbd_size, &coalesced_block->size_index, fbd_t::size_index_search_t{});
+			//return;
 
 			// it always falls into the appropriate smd according to our algorithm
 			smd_t* curr_smd = smd_t::addr_index_to_descr(bst::lower_bound(smd_addr, ptr, smd_t::containing_block_search_t{}));
