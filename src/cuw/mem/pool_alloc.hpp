@@ -297,7 +297,7 @@ namespace cuw::mem {
 		// returns non-zero on success, returns 0 on failure
 		std::size_t adjust_raw_alignment(std::size_t value) {
 			if (value == 0) {
-				value = base_t::alloc_base_alignment;
+				value = base_t::alloc_basic_alignment;
 			} if (!is_alignment(value)) {
 				return 0;
 			} if (value <= base_t::get_page_size()) {
@@ -308,7 +308,7 @@ namespace cuw::mem {
 		// returns non-zero on success, returns 0 on failure
 		std::size_t adjust_pool_alignment(std::size_t value) {
 			if (value == 0) {
-				value = base_t::alloc_base_alignment;
+				value = base_t::alloc_basic_alignment;
 			} if (!is_alignment(value)) {
 				return 0;
 			} if (value <= max_pool_alignment) {

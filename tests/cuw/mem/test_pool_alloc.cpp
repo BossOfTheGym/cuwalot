@@ -20,7 +20,7 @@ namespace {
 		static constexpr std::size_t alloc_max_pool_power = mem::block_align_pow + 4; // 2^10
 		static constexpr std::size_t alloc_pool_cache_lookups = 4;
 		static constexpr std::size_t alloc_raw_cache_lookups = 4;
-		static constexpr std::size_t alloc_base_alignment = 16;
+		static constexpr std::size_t alloc_basic_alignment = 16;
 		static constexpr bool use_alloc_cache = false;
 		static constexpr auto alloc_pool_first_chunk = mem::pool_chunk_size_t::Bytes2;
 		static constexpr auto alloc_pool_last_chunk = mem::pool_chunk_size_t::Bytes128;
@@ -35,9 +35,11 @@ namespace {
 	template<class alloc_t>
 	inline constexpr bool is_page_alloc_v = is_page_alloc_t<alloc_t>::value;
 
-	using pool_alloc_traits_t = mem::pool_alloc_traits_t<mem::page_alloc_traits_t<basic_alloc_traits_t>>;
+	struct pool_alloc_traits_t
+		: mem::pool_alloc_traits_t<basic_alloc_traits_t>
+		, mem::page_alloc_traits_t<basic_alloc_traits_t> {};
+
 	//using page_alloc_t = mem::page_alloc_t<dummy_allocator_t<pool_alloc_traits_t>>;
-	// TODO : check dummy alloc for overlaps
 	using page_alloc_t = dummy_allocator_t<pool_alloc_traits_t>;
 	using pool_alloc_t = mem::pool_alloc_t<page_alloc_t>;
 

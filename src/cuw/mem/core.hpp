@@ -55,7 +55,7 @@ namespace cuw::mem {
 	inline constexpr int default_pool_cache_lookups = 6; // lookups in free_list to access chunk(to realloc or free)
 	inline constexpr int default_raw_cache_lookups = 10; // lookups in a list of raw allocations(to realloc or free)
 
-	inline constexpr std::size_t default_base_alignment = 16; // default alignment
+	inline constexpr std::size_t default_basic_alignment = 16; // default alignment
 
 	inline constexpr bool default_use_alloc_cache = true; // true, use allocation cache to reduce usage of page_alloc
 	inline constexpr bool default_use_locking = true; // true, use locking for multithreading
