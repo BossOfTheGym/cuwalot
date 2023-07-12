@@ -486,27 +486,10 @@ namespace cuw::mem {
 			} return coalesced_block;
 		}
 
-		// O(12 * log(n) + walk), (insert_lb counts as 2 operations)
-		void insert_free_block(void* ptr, std::size_t size) {
-			fbd_t* coalesced_block = nullptr;
-			coalesce_info_t info = get_coalesce_info(ptr, size);
-			if (info.requires_fbd_alloc()) {
-				fbd_t* fbd = alloc_fbd(ptr, size);
-				if (!fbd) {
-					std::abort();
-				} coalesced_block = coalesce_free_block(info, fbd, false);
-			} else {
-				fbd_t dummy{ .size = size, .data = ptr };
-				coalesced_block = coalesce_free_block(info, &dummy, true);
-			}
-
-			// TODO: HEHEHEH! DIRTY OPTIMIZATION!
-			//fbd_size = trb::insert_lb(fbd_size, &coalesced_block->size_index, fbd_t::size_index_search_t{});
-			//return;
-
+		void walk_free_smds(fbd_t* coalesced_block, void* ptr_hint) {
 			// it always falls into the appropriate smd according to our algorithm
-			smd_t* curr_smd = smd_t::addr_index_to_descr(bst::lower_bound(smd_addr, ptr, smd_t::containing_block_search_t{}));
-			if (!curr_smd || (std::uintptr_t)ptr < (std::uintptr_t)curr_smd->get_start()) {
+			smd_t* curr_smd = smd_t::addr_index_to_descr(bst::lower_bound(smd_addr, ptr_hint, smd_t::containing_block_search_t{}));
+			if (!curr_smd || (std::uintptr_t)ptr_hint < (std::uintptr_t)curr_smd->get_start()) {
 				std::abort(); // no containing sysmem region
 			}
 
@@ -559,6 +542,32 @@ namespace cuw::mem {
 				// cut whole block => no parts, completely remove block from the index
 				fbd_addr = trb::remove(fbd_addr, &coalesced_block->addr_index);
 				free_fbd(coalesced_block);
+			}
+		}
+
+		// O(12 * log(n) + walk), (insert_lb counts as 2 operations)
+		void insert_free_block(void* ptr, std::size_t size) {
+			fbd_t* coalesced_block = nullptr;
+			coalesce_info_t info = get_coalesce_info(ptr, size);
+			if (info.requires_fbd_alloc()) {
+				fbd_t* fbd = alloc_fbd(ptr, size);
+				if (!fbd) {
+					std::abort();
+				} coalesced_block = coalesce_free_block(info, fbd, false);
+			} else {
+				fbd_t dummy{ .size = size, .data = ptr };
+				coalesced_block = coalesce_free_block(info, &dummy, true);
+			}
+
+			// EHEHE! DIRTY OPTIMIZATION HACK!
+			if constexpr(base_t::use_dirty_optimization_hacks) {
+				// only insert block into the size index (not inserted after coalesce_free_block)
+				// it becomes little bit cheaper but we no longer free virtual memory
+				// can be fixed be manually doing it but for now there is no such function
+				fbd_size = trb::insert_lb(fbd_size, &coalesced_block->size_index, fbd_t::size_index_search_t{});
+			} else {
+				// process free smds & insert what is remaining into the size index
+				walk_free_smds(coalesced_block, ptr);
 			}
 		}
 

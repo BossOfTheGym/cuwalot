@@ -223,6 +223,17 @@ namespace cuw::mem {
 			static constexpr bool use_alloc_cache = alloc_traits_t::use_alloc_cache;
 		};
 
+		template<class alloc_traits_t, class = void>
+		struct use_dirty_optimization_hacks_t {
+			static constexpr bool use_dirty_optimization_hacks = default_use_dirty_optimization_hacks;
+		};
+
+		template<class alloc_traits_t>
+		struct use_dirty_optimization_hacks_t<alloc_traits_t,
+			std::void_t<enable_option_t<bool, decltype(alloc_traits_t::use_dirty_optimization_hacks)>>> {
+			static constexpr bool use_dirty_optimization_hacks = alloc_traits_t::use_dirty_optimization_hacks;
+		};
+
 		template<class alloc_traits_t>
 		struct check_alloc_cache_t {
 		private:
@@ -285,12 +296,13 @@ namespace cuw::mem {
 	template<class traits_t>
 	struct page_alloc_traits_t : public traits_t {
 		static constexpr bool use_resolved_page_size = impl::use_resolved_page_size_t<traits_t>::use_resolved_page_size;
+		static constexpr bool use_dirty_optimization_hacks = impl::use_dirty_optimization_hacks_t<traits_t>::use_dirty_optimization_hacks;
 
 		static constexpr std::size_t alloc_page_size = impl::alloc_page_size_t<traits_t>::alloc_page_size;
 		static constexpr std::size_t alloc_block_pool_size = impl::alloc_block_pool_size_t<traits_t>::alloc_block_pool_size;
 		static constexpr std::size_t alloc_sysmem_pool_size = impl::alloc_sysmem_pool_size_t<traits_t>::alloc_sysmem_pool_size;
 		static constexpr std::size_t alloc_min_block_size = impl::alloc_min_block_size_t<traits_t>::alloc_min_block_size;
-		static constexpr std::size_t alloc_merge_coef = impl::alloc_merge_coef_t<traits_t>::alloc_merge_coef;
+		static constexpr std::size_t alloc_merge_coef = impl::alloc_merge_coef_t<traits_t>::alloc_merge_coef; // unused
 	};
 
 	template<class traits_t>

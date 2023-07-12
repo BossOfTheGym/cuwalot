@@ -32,8 +32,6 @@ namespace cuw::mem {
 	inline constexpr attrs_t max_pool_blocks = (1 << 16) - 1;
 	inline constexpr attrs_t block_pool_head_empty = max_pool_blocks;
 
-	inline constexpr std::size_t dummy_alignment = 1;
-
 	inline constexpr attrs_t min_pool_chunks = 1;
 	inline constexpr attrs_t max_pool_chunks = ((attrs_t)1 << 14) - 1;
 	inline constexpr attrs_t max_alloc_bits = 48;
@@ -45,8 +43,10 @@ namespace cuw::mem {
 	inline constexpr std::size_t block_size = 64;
 
 	inline constexpr bool default_use_resolved_page_size = false;
+	inline constexpr bool default_use_dirty_optimization_hacks = false; // switch on/off some functionality
+
 	inline constexpr std::size_t default_page_size = 1 << 12; // 4K
-	inline constexpr std::size_t default_block_pool_size = 1 << 14; // 16K
+	inline constexpr std::size_t default_block_pool_size = 1 << 12; // 4K
 	inline constexpr std::size_t default_sysmem_pool_size = 1 << 12; // 4K
 	inline constexpr std::size_t default_min_block_size = (std::size_t)1 << 20; // 1M
 	inline constexpr std::size_t default_merge_coef = 4;
@@ -56,16 +56,17 @@ namespace cuw::mem {
 	inline constexpr attrs_t default_min_pool_size = (attrs_t)1 << default_min_pool_power;
 	inline constexpr attrs_t default_max_pool_size = (attrs_t)1 << default_max_pool_power;
 
-	inline constexpr int default_pool_cache_lookups = 4; // lookups in free_list to access chunk(to realloc or free)
-	inline constexpr int default_raw_cache_lookups = 8; // lookups in a list of raw allocations(to realloc or free)
+	inline constexpr int default_pool_cache_lookups = 6; // lookups in free_list to access chunk(to realloc or free)
+	inline constexpr int default_raw_cache_lookups = 10; // lookups in a list of raw allocations(to realloc or free)
 
 	inline constexpr std::size_t default_base_alignment = 16; // default alignment
 
-	inline constexpr bool default_use_alloc_cache = true;
-	inline constexpr std::size_t default_cache_slots = 4; // cache some free blocks for faster allocation
+	inline constexpr bool default_use_alloc_cache = true; // true
+	inline constexpr std::size_t default_cache_slots = 6; // cache some free blocks for faster allocation
 	inline constexpr std::size_t default_min_slot_size = 1 << 15; // 32K as default_min_pool_size
-	inline constexpr std::size_t default_max_slot_size = 1 << 24; // 16M as default_min_block_size
+	inline constexpr std::size_t default_max_slot_size = 1 << 20; // 1M as default_min_block_size
 	inline constexpr std::size_t default_max_cache_size = default_cache_slots * default_max_slot_size;
+
 
 	using void_node_traits_t = trb::tree_node_packed_traits_t<void>;
 
