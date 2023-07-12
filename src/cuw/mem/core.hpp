@@ -18,10 +18,6 @@
 #include <cuw/utils/list.hpp>
 #include <cuw/utils/trb_node.hpp>
 
-// TODO : get rid of pool_chunk_size_t
-// TODO : shitty codestyle
-// TODO : move/copy constructors, see cppguidelines
-
 namespace cuw::mem {
 	using ptr_t = std::uintptr_t;
 	using attrs_t = std::uint64_t;
@@ -61,7 +57,9 @@ namespace cuw::mem {
 
 	inline constexpr std::size_t default_base_alignment = 16; // default alignment
 
-	inline constexpr bool default_use_alloc_cache = true; // true
+	inline constexpr bool default_use_alloc_cache = true; // true, use allocation cache to reduce usage of page_alloc
+	inline constexpr bool default_use_locking = true; // true, use locking for multithreading
+
 	inline constexpr std::size_t default_cache_slots = 6; // cache some free blocks for faster allocation
 	inline constexpr std::size_t default_min_slot_size = 1 << 15; // 32K as default_min_pool_size
 	inline constexpr std::size_t default_max_slot_size = 1 << 20; // 1M as default_min_block_size

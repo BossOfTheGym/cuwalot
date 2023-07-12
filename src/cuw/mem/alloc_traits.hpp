@@ -224,6 +224,17 @@ namespace cuw::mem {
 		};
 
 		template<class alloc_traits_t, class = void>
+		struct use_locking_t {
+			static constexpr bool use_locking = default_use_locking;
+		};
+
+		template<class alloc_traits_t>
+		struct use_locking_t<alloc_traits_t,
+			std::void_t<enable_option_t<bool, decltype(alloc_traits_t::use_locking)>>> {
+			static constexpr bool use_locking = alloc_traits_t::use_locking;
+		};
+
+		template<class alloc_traits_t, class = void>
 		struct use_dirty_optimization_hacks_t {
 			static constexpr bool use_dirty_optimization_hacks = default_use_dirty_optimization_hacks;
 		};
@@ -325,6 +336,7 @@ namespace cuw::mem {
 		static constexpr int alloc_raw_cache_lookups = impl::alloc_raw_cache_lookups_t<traits_t>::alloc_raw_cache_lookups;
 
 		static constexpr bool use_alloc_cache = impl::use_alloc_cache_t<traits_t>::use_alloc_cache;
+		static constexpr bool use_locking = impl::use_locking_t<traits_t>::use_locking;
 
 		static constexpr pool_chunk_size_t alloc_pool_first_chunk = impl::alloc_pool_specs_t<traits_t>::alloc_pool_first_chunk;
 		static constexpr pool_chunk_size_t alloc_pool_last_chunk = impl::alloc_pool_specs_t<traits_t>::alloc_pool_last_chunk;
