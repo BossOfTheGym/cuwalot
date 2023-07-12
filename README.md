@@ -9,7 +9,7 @@ Tree-based memory allocator. Utilizes red-black trees. The best allocator in the
 - rework cache_alloc
 - add should_free_smd flag as dirty greedy hacky optimization
 - remove stupid enums
-- fuck standart API: remove it completely (leave it for dinosaurs)
+- fuck standart API: remove it completely (leave it to dinosaurs)
 - fuck standart API: return memory handle(alloc_descr_t pointer) to facilitate memory freeing (it even removes neccessity in list_entry_t in alloc_descr, oh fuck)
 - mmm! so good!
 - multithreading, rework pool_alloc
