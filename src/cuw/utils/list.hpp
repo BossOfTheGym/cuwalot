@@ -86,13 +86,18 @@ namespace cuw::list {
 	void swap_nodes(node_t* node1, node_t* node2) {
 		if (node1 == node2) {
 			return; // early out
-		} if (node1->next == node2) {
+		}
+		
+		if (node1->next == node2) {
 			swap_next(node1);
 			return;
-		} if (node2->next == node1) {
+		}
+		
+		if (node2->next == node1) {
 			swap_next(node2);
 			return;
 		}
+
 		std::swap(node1->prev, node2->prev);
 		std::swap(node1->next, node2->next);
 		node1->prev->next = node1;
@@ -107,6 +112,7 @@ namespace cuw::list {
 		if (empty(another)) {
 			return;
 		}
+		
 		list->prev->next = another->next;
 		another->next->prev = list->prev;
 		another->prev->next = list;
@@ -142,10 +148,13 @@ namespace cuw::list {
 		if (empty(src)) {
 			move_head(dst, src);
 			return;
-		} if (empty(dst)) {
+		}
+		
+		if (empty(dst)) {
 			move_head(src, dst);
 			return;
 		}
+
 		std::swap(src->prev, dst->prev);
 		std::swap(src->next, dst->next);
 		src->prev->next = src;

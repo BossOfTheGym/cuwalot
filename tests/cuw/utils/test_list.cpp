@@ -33,7 +33,8 @@ namespace {
 		friend std::ostream& operator << (std::ostream& os, const print_list_t& pl) {
 			for (list_t* node : list::iter_helper_t{&pl.head}) {
 				os << node->data << " ";
-			} return os;
+			}
+			return os;
 		}
 
 		list_t& head;
@@ -46,7 +47,8 @@ namespace {
 				os << pd.data;
 			} else {
 				os << "head";
-			} return os;
+			}
+			return os;
 		}
 
 		data_t data;
@@ -66,6 +68,7 @@ namespace {
 		int count = 10;
 		list_t head{};
 		create_list(head, count);
+
 		std::cout << "initial list: " << print_list_t(head) << std::endl;
 		for (int i = -1; i <= count + 1; i++) {
 			list_t part1, part2;
@@ -78,6 +81,7 @@ namespace {
 			std::cout << "reunited: " << print_list_t{head} << std::endl;
 			std::cout << std::endl;
 		}
+
 		destroy_list(head);
 		std::cout << "test finished" << std::endl;
 		std::cout << std::endl;
@@ -88,17 +92,20 @@ namespace {
 		int count = 10;
 		list_t head{};
 		create_list(head, count);
+
 		std::cout << "initial list: " << print_list_t{head} << std::endl;
 		std::cout << "testing swap_prev" << std::endl;
 		for (int i = 0; i < count; i++) {
 			list::swap_prev(&head);
 			std::cout << i << ": " << print_list_t{head} << std::endl;
 		}
+
 		std::cout << "testing swap_next" << std::endl;
 		for (int i = 0; i < count; i++) {
 			list::swap_next(&head);
 			std::cout << i << ": " << print_list_t{head} << std::endl;
 		}
+
 		destroy_list(head);
 		std::cout << "test finished" << std::endl;
 		std::cout << std::endl;

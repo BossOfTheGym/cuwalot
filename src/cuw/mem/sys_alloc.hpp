@@ -34,12 +34,15 @@ namespace cuw::mem {
 		[[nodiscard]] void* reallocate(void* old_ptr, std::size_t old_size, std::size_t new_size) {
 			assert(old_size != 0);
 			assert(new_size != 0);
+			
 			void* new_ptr = allocate(new_size);
 			if (new_ptr) {
 				std::memcpy(new_ptr, old_ptr, std::min(old_size, new_size));
 				deallocate(old_ptr, old_size);
 				return new_ptr;
-			} return nullptr;
+			}
+			
+			return nullptr;
 		}
 	};
 }

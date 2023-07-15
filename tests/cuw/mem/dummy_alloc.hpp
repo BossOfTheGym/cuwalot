@@ -83,7 +83,9 @@ namespace {
 			for (auto& range : _ranges) {
 				assert(mem::is_aligned(range.ptr, alignment));
 				return_range(range);
-			} for (auto& range : alloc_ranges) {
+			}
+			
+			for (auto& range : alloc_ranges) {
 				std::cout << "initial alloc range: " << range << std::endl;
 			}
 		}
@@ -110,7 +112,9 @@ namespace {
 			another.alloc_ranges.clear();
 			for (auto& range : another.ranges) {
 				return_range(range);
-			} another.ranges.clear();
+			}
+			
+			another.ranges.clear();
 		}
 
 	private:
@@ -122,12 +126,16 @@ namespace {
 				if (curr == ranges.end()) {
 					std::cerr << "curr is invalid" << std::endl;
 					std::abort();
-				} if (prev != ranges.end()) {
+				}
+				
+				if (prev != ranges.end()) {
 					std::cout << "merging " << *prev << " and " << *curr << std::endl; 
 					if (prev->overlaps(*curr)) {
 						std::cerr << "overlap detected" << std::endl;
 						std::abort();
-					} if (prev->get_end() == curr->get_start()) {
+					}
+					
+					if (prev->get_end() == curr->get_start()) {
 						std::cout << "merging two ranges: " << *prev << " " << *curr << std::endl;
 						range_t new_range{nullptr, prev->ptr, prev->size + curr->size};
 						ranges.erase(prev);
@@ -137,19 +145,25 @@ namespace {
 						std::cout << "merged into: " << *new_curr << std::endl;
 						return new_curr;
 					}
-				} return curr;
+				}
+				
+				return curr;
 			};
 
 			auto merge_curr_next = [&] (auto curr, auto next) {
 				if (curr == ranges.end()) {
 					std::cerr << "curr is invalid" << std::endl;
 					std::abort();
-				} if (next != ranges.end()) {
+				}
+				
+				if (next != ranges.end()) {
 					std::cout << "merging " << *curr << " and " << *next << std::endl; 
 					if (curr->overlaps(*next)) {
 						std::cerr << "overlap detected" << std::endl;
 						std::abort();
-					} if (curr->get_end() == next->get_start()) {
+					}
+					
+					if (curr->get_end() == next->get_start()) {
 						std::cout << "merging two ranges: " << *curr << " " << *next << std::endl;
 						range_t new_range{nullptr, curr->ptr, curr->size + next->size};
 						ranges.erase(curr);
@@ -159,7 +173,9 @@ namespace {
 						std::cout << "merged into: " << *new_curr << std::endl;
 						return new_curr;
 					}
-				} return curr;
+				}
+				
+				return curr;
 			};
 
 			auto prev = it; --prev;
@@ -188,8 +204,11 @@ namespace {
 					}
 					std::cout << "allocated memory: " << ptr << std::endl << std::endl;
 					return ptr;
-				} ++i;
+				}
+				
+				++i;
 			}
+
 			std::cout << "failed to make allocation of size " << size << std::endl << std::endl;
 			return nullptr;
 		}
@@ -213,6 +232,7 @@ namespace {
 				std::cout << "memory successfully reallocated: " << new_ptr << std::endl << std::endl;
 				return new_ptr;
 			}
+
 			std::cout << "failed to reallocate memory" << std::endl << std::endl;
 			return nullptr;
 		}
@@ -229,9 +249,12 @@ namespace {
 				while (i != e) {
 					if (i->has_ptr(hint)) {
 						return i;
-					} ++i;
-				} return e;
+					}
+					++i;
+				}
+				return e;
 			})();
+
 			if (it == ranges.end()) {
 				std::cout << "error: range was not found" << std::endl;
 				return nullptr;
@@ -250,11 +273,14 @@ namespace {
 				auto new_range = range_t{nullptr, (void*)a, c - a};
 				std::cout << "inserting new range " << new_range << std::endl;
 				ranges.insert(new_range);
-			} if (c + size != b) {
+			}
+			
+			if (c + size != b) {
 				auto new_range = range_t{nullptr, (void*)(c + size), b - c - size};
 				std::cout << "inserting new range " << new_range << std::endl;
 				ranges.insert(new_range);
 			}
+
 			std::cout << "allocated memory: " << hint << std::endl << std::endl;
 			return hint;
 		}
@@ -267,6 +293,7 @@ namespace {
 				std::cout << "memory successfully reallocated: " << new_ptr << std::endl << std::endl;
 				return new_ptr;
 			}
+
 			std::cout << "failed to reallocate memory" << std::endl << std::endl;
 			return nullptr;
 		}
@@ -420,13 +447,19 @@ namespace {
 			if (!request.is_alloc_request()) {
 				std::cout << "current request is not an allocate request" << std::endl;
 				return nullptr;
-			} if (!request.matches_alloc_params(size)) {
+			}
+			
+			if (!request.matches_alloc_params(size)) {
 				std::cout << "parameters given do not match expected request" << std::endl;
 				return nullptr;
-			} if (void* ptr = alloc.allocate_hint(request.hint, size)) {
+			}
+			
+			if (void* ptr = alloc.allocate_hint(request.hint, size)) {
 				requests.pop_back();
 				return ptr;
-			} return nullptr;
+			}
+			
+			return nullptr;
 		}
 
 		void deallocate(void* ptr, std::size_t size) {
@@ -441,13 +474,19 @@ namespace {
 			if (!request.is_realloc_request()) {
 				std::cout << "current request is not a reallocate request" << std::endl;
 				return nullptr;
-			} if (!request.matches_realloc_params(ptr, old_size, new_size)) {
+			}
+			
+			if (!request.matches_realloc_params(ptr, old_size, new_size)) {
 				std::cout << "parameters given do not match expected request" << std::endl;
 				return nullptr;
-			} if (void* ptr = alloc.reallocate_hint(request.hint, ptr, old_size, new_size)) {
+			}
+			
+			if (void* ptr = alloc.reallocate_hint(request.hint, ptr, old_size, new_size)) {
 				requests.pop_back();
 				return ptr;
-			} return nullptr;
+			}
+			
+			return nullptr;
 		}
 
 		[[nodiscard]] void* allocate_hint(void* hint, std::size_t size) {
@@ -480,7 +519,9 @@ namespace {
 		friend std::ostream& operator << (std::ostream& os, const ranges_info_t& info) {
 			for (auto& range : info.alloc.get_ranges()) {
 				os << range << std::endl;
-			} return os;
+			}
+			
+			return os;
 		}
 
 		alloc_t& alloc;
@@ -491,7 +532,8 @@ namespace {
 		friend std::ostream& operator << (std::ostream& os, const alloc_ranges_info_t& info) {
 			for (auto& range : info.alloc.get_alloc_ranges()) {
 				os << range << std::endl;
-			} return os;
+			}
+			return os;
 		}
 
 		alloc_t& alloc;
@@ -526,11 +568,14 @@ namespace {
 			if (i % mem::block_align == 0) {
 				os << std::dec << std::setfill(' ') << std::setw(8) << i / mem::block_align << ": ";
 			}
+
 			os << std::hex << std::setfill('0') << std::setw(2) << (int)ptr[i];
 			if ((i + 1) % mem::block_align == 0) {
 				os << std::endl;
 			}
-		} return os;
+		}
+		
+		return os;
 	}
 
 	void check_allocation(void* allocated, void* expected) {

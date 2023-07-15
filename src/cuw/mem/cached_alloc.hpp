@@ -29,14 +29,6 @@ namespace cuw::mem {
 		cached_alloc_t& operator = (cached_alloc_t&&) noexcept = delete;
 		cached_alloc_t& operator = (const cached_alloc_t&) = delete;
 
-		void adopt(cached_alloc_t& another) {
-			base_t::adopt(another);
-			for (auto& slot : another.slots) {
-				fill_slots(slot.ptr, slot.size);
-				slot.reset();
-			}
-		}
-
 	private:
 		static constexpr std::size_t slot_count = base_t::alloc_cache_slots;
 		static constexpr std::size_t min_slot_size = base_t::alloc_min_slot_size;
@@ -90,11 +82,17 @@ namespace cuw::mem {
 				void* ptr = slot.allocate(size);
 				if (!ptr) {
 					continue;
-				} if (!slot.is_null() && slot.get_size() < min_slot_size) {
+				}
+
+				if (!slot.is_null() && slot.get_size() < min_slot_size) {
 					base_t::deallocate(slot.get_ptr(), slot.get_size());
 					slot.reset();
-				} return ptr;
-			} return nullptr;
+				}
+
+				return ptr;
+			}
+
+			return nullptr;
 		}
 
 		// find slot of maximum capacity and allocate whole memory from it, can be empty
@@ -102,6 +100,7 @@ namespace cuw::mem {
 			auto& slot = *std::max_element(std::begin(slots), std::end(slots), [&] (auto& s0, auto& s1) {
 				return s0.get_size() < s1.get_size();
 			});
+
 			auto alloc = slot.to_tuple();
 			slot.reset();
 			return alloc;
@@ -120,24 +119,31 @@ namespace cuw::mem {
 				std::size_t slot_size = std::min(chunk.get_size(), max_slot_size);
 				if (slot_size < min_slot_size) {
 					break;
-				} if (slot.get_size() < slot_size) {
+				}
+				
+				if (slot.get_size() < slot_size) {
 					if (!slot.is_null()) {
 						base_t::deallocate(slot.get_ptr(), slot.get_size());
 					} slot = slot_t{chunk.allocate(slot_size), slot_size};
-				} if (chunk.is_null()) {
+				}
+				
+				if (chunk.is_null()) {
 					break;
 				}
-			} if (!chunk.is_null()) {
+			}
+			
+			if (!chunk.is_null()) {
 				base_t::deallocate(chunk.get_ptr(), chunk.get_size());
 			}
 		}
 
 	public:
 		void* allocate(std::size_t size) {
-			size = align_value(size, base_t::get_page_size()); // TODO : design flaw??? or leave it for safety
+			size = align_value(size, base_t::get_page_size());
 			if (void* ptr = allocate_from_slots(size)) {
 				return ptr;
-			} return base_t::allocate(size);
+			}	
+			return base_t::allocate(size);
 		}
 
 		void deallocate(void* ptr, std::size_t size) {
@@ -149,7 +155,8 @@ namespace cuw::mem {
 				std::memcpy(new_ptr, old_ptr, old_size);
 				deallocate(old_ptr, old_size);
 				return new_ptr;
-			} return base_t::reallocate(old_ptr, old_size, new_size);
+			}
+			return base_t::reallocate(old_ptr, old_size, new_size);
 		}
 
 	public:
@@ -157,14 +164,18 @@ namespace cuw::mem {
 			switch (flags) {
 				case cached_alloc_flags_t::Exact: {
 					return {allocate(size), size};
-				} case cached_alloc_flags_t::Any: {
+				}
+				
+				case cached_alloc_flags_t::Any: {
 					// TODO : we scan slots here twice, maybe it'd be better if we scan them once?
 					if (void* ptr = allocate_from_slots(size); ptr) {
 						return {ptr, size};
 					} if (auto [ptr, true_size] = allocate_max(); ptr) {
 						return {ptr, true_size};
 					} return base_t::allocate(size);
-				} default: {
+				}
+				
+				default: {
 					std::abort();
 				}
 			}

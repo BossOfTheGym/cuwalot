@@ -106,7 +106,9 @@ public:
 		if (node) {
 			root = trb::insert_ub(root, node, key_ops);
 			return;
-		} throw std::runtime_error("out of memory");
+		}
+		
+		throw std::runtime_error("out of memory");
 	}
 
 	bool remove(int key) {
@@ -115,7 +117,8 @@ public:
 			root = trb::remove(root, lb);
 			storage.destroy(lb);
 			return true;
-		} return false;
+		}
+		return false;
 	}
 
 	bool has(int key) {
@@ -176,27 +179,41 @@ std::ostream& operator << (std::ostream& os, const tree_ops_t& ops) {
 			case Insert: {
 				os << "i:" << key << " ";
 				break;
-			} case Remove: {
+			}
+			
+			case Remove: {
 				os << "r:" << key << "," << present << " ";
 				break;
-			} case Has: {
+			}
+			
+			case Has: {
 				os << "h:" << key << "," << present << " ";
 				break;
-			} case Print: {
+			}
+			
+			case Print: {
 				os << "p ";
 				break;
-			} case CheckAllocations: {
+			}
+			
+			case CheckAllocations: {
 				os << "ca ";
 				break;
-			} case CheckInvariant: {
+			}
+			
+			case CheckInvariant: {
 				os << "ci ";
 				break;
-			} default: {
+			}
+			
+			default: {
 				os << "iii ";
 				break;
 			}
 		}
-	} return os;
+	}
+	
+	return os;
 }
 
 int tree_test(int nodes, const tree_ops_t& ops) {
@@ -210,27 +227,39 @@ int tree_test(int nodes, const tree_ops_t& ops) {
 			case Insert: {
 				tree.insert(key);
 				break;
-			} case Remove: {
+			}
+			
+			case Remove: {
 				if (tree.remove(key) != present) {
 					throw std::runtime_error(format_err_msg("remove", key, tree));
 				} break;
-			} case Has: {
+			}
+			
+			case Has: {
 				if (tree.has(key) != present) {
 					throw std::runtime_error(format_err_msg("has", key, tree));
 				} break;
-			} case Print: {
+			}
+			
+			case Print: {
 				tree.print(std::cout);
 				break;
-			} case CheckInvariant: {
+			}
+			
+			case CheckInvariant: {
 				if (!tree.check_invariant()) {
 					throw std::runtime_error("invariant");
 				} break;
-			} default: {
+			}
+			
+			default: {
 				throw std::runtime_error("invalid op");
 				break;
 			}
 		}
-	} return 0;
+	}
+	
+	return 0;
 }
 
 int tree_test1() {
@@ -243,15 +272,21 @@ int tree_test1() {
 		ops.push_back({CheckInvariant});
 		for (int j = 0; j <= i; j++) {
 			ops.push_back({Has, j, true});
-		} for (int j = i + 1; j < nodes; j++) {
+		}
+		
+		for (int j = i + 1; j < nodes; j++) {
 			ops.push_back({Has, j, false});
 		}
-	} for (int i = 0; i < nodes; i++) {
+	}
+	
+	for (int i = 0; i < nodes; i++) {
 		ops.push_back({Remove, i, true});
 		ops.push_back({CheckInvariant});
 		for (int j = 0; j <= i; j++) {
 			ops.push_back({Has, j, false});
-		} for (int j = i + 1; j < nodes; j++) {
+		}
+		
+		for (int j = i + 1; j < nodes; j++) {
 			ops.push_back({Has, j, true});
 		}
 	}
@@ -272,15 +307,21 @@ int tree_test2() {
 		ops.push_back({CheckInvariant});
 		for (int j = 0; j <= i; j++) {
 			ops.push_back({Has, j, true});
-		} for (int j = i + 1; j < nodes; j++) {
+		}
+		
+		for (int j = i + 1; j < nodes; j++) {
 			ops.push_back({Has, j, false});
 		}
-	} for (int i = nodes - 1; i >= 0; i--) {
+	}
+	
+	for (int i = nodes - 1; i >= 0; i--) {
 		ops.push_back({Remove, i, true});
 		ops.push_back({CheckInvariant});
 		for (int j = nodes - 1; j >= i; j--) {
 			ops.push_back({Has, j, false});
-		} for (int j = i - 1; j >= 0; j--) {
+		}
+		
+		for (int j = i - 1; j >= 0; j--) {
 			ops.push_back({Has, j, true});
 		}
 	}
@@ -348,9 +389,13 @@ struct seq_wrapper_t {
 std::ostream& operator << (std::ostream& os, const seq_wrapper_t& obj) {
 	for (int i = 1; i < obj.seq.size(); i++) {
 		os << obj.seq[i - 1] << " ";
-	} if (obj.seq.size() != 0) {
+	}
+	
+	if (obj.seq.size() != 0) {
 		os << obj.seq.back();
-	} return os;
+	}
+	
+	return os;
 }
 
 int tree_factorial_test() {
@@ -374,15 +419,18 @@ int tree_factorial_test() {
 				if (!tree.check_invariant()) {
 					throw std::runtime_error(format_err_msg("insert,invariant", key, tree, seq));
 				}
-			} insert = false;
+			}
+			insert = false;
 		} else {
 			for (auto key : seq) {
 				if (!tree.remove(key)) {
 					throw std::runtime_error(format_err_msg("remove", key, tree, seq));
-				} if (!tree.check_invariant()) {
+				}
+				if (!tree.check_invariant()) {
 					throw std::runtime_error(format_err_msg("remove,invariant", key, tree, seq));
 				}
-			} insert = true;
+			}
+			insert = true;
 		}
 	} while(std::next_permutation(seq.begin(), seq.end()));
 
@@ -411,21 +459,31 @@ int tree_full_factorial_test() {
 				if (!tree.check_invariant()) {
 					throw std::runtime_error(format_err_msg("insert,invariant", key, insert_seq, remove_seq));
 				}
-			} for (auto key : insert_seq) {
+			}
+			
+			for (auto key : insert_seq) {
 				tree.insert(key);
 				if (!tree.check_invariant()) {
 					throw std::runtime_error(format_err_msg("insert,invariant(1)", key, insert_seq, remove_seq));
 				}
-			} for (auto key : remove_seq) {
+			}
+			
+			for (auto key : remove_seq) {
 				if (!tree.remove(key)) {
 					throw std::runtime_error(format_err_msg("remove", key, insert_seq, remove_seq));
-				} if (!tree.check_invariant()) {
+				}
+				
+				if (!tree.check_invariant()) {
 					throw std::runtime_error(format_err_msg("remove,invariant", key, insert_seq, remove_seq));
 				}
-			} for (auto key : remove_seq) {
+			}
+			
+			for (auto key : remove_seq) {
 				if (!tree.remove(key)) {
 					throw std::runtime_error(format_err_msg("remove(1)", key, insert_seq, remove_seq));
-				} if (!tree.check_invariant()) {
+				}
+				
+				if (!tree.check_invariant()) {
 					throw std::runtime_error(format_err_msg("remove,invariant(1)", key, insert_seq, remove_seq));
 				}
 			}
@@ -466,7 +524,8 @@ NOINLINE test_result_t __stress_test(test_func_t test_func, int skip = 1, int k 
 	double dev = 0.0;
 	for (int i = skip; i < k; i++) {
 		dev += (measurements[i] - avg) * (measurements[i] - avg);
-	} dev = std::sqrt(dev / (k - skip - 1));
+	}
+	dev = std::sqrt(dev / (k - skip - 1));
 
 	double min = *std::min_element(measurements.begin() + skip, measurements.end());
 	double max = *std::max_element(measurements.begin() + skip, measurements.end());
@@ -491,9 +550,12 @@ NOINLINE long long __tree_stress_test() {
 	auto t0 = std::chrono::high_resolution_clock::now();
 	for (int i = 0; i < nodes; i++) {
 		tree.insert(i);
-	} for (int i = 0; i < nodes; i++) {
+	}
+	
+	for (int i = 0; i < nodes; i++) {
 		tree.remove(i);
-	} auto t1 = std::chrono::high_resolution_clock::now();
+	}
+	auto t1 = std::chrono::high_resolution_clock::now();
 	
 	auto dt_ms = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();
 	std::cout << "test passsed in " << dt_ms << "ms" << std::endl;
@@ -512,9 +574,13 @@ NOINLINE long long __tree_stress_test1() {
 	auto t0 = std::chrono::high_resolution_clock::now();
 	for (int i = nodes - 1; i >= 0; i--) {
 		tree.insert(i);
-	} for (int i = 0; i < nodes; i++) {
+	}
+	
+	for (int i = 0; i < nodes; i++) {
 		tree.remove(i);
-	} auto t1 = std::chrono::high_resolution_clock::now();
+	}
+	
+	auto t1 = std::chrono::high_resolution_clock::now();
 	
 	auto dt_ms = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();
 	std::cout << "test passsed in " << dt_ms << "ms" << std::endl;
@@ -532,9 +598,13 @@ NOINLINE long long __stress_test_std_set() {
 	auto t0 = std::chrono::high_resolution_clock::now();
 	for (int i = 0; i < nodes; i++) {
 		tree.insert(i);
-	} for (int i = 0; i < nodes; i++) {
+	}
+	
+	for (int i = 0; i < nodes; i++) {
 		tree.erase(i);
-	} auto t1 = std::chrono::high_resolution_clock::now();
+	}
+	
+	auto t1 = std::chrono::high_resolution_clock::now();
 
 	auto dt_ms = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();
 	std::cout << "test passsed in " << dt_ms << "ms" << std::endl;
@@ -552,9 +622,12 @@ NOINLINE long long __stress_test_std_set1() {
 	auto t0 = std::chrono::high_resolution_clock::now();
 	for (int i = nodes - 1; i >= 0; i--) {
 		tree.insert(i);
-	} for (int i = 0; i < nodes; i++) {
+	}
+	
+	for (int i = 0; i < nodes; i++) {
 		tree.erase(i);
-	} auto t1 = std::chrono::high_resolution_clock::now();
+	}
+	auto t1 = std::chrono::high_resolution_clock::now();
 
 	auto dt_ms = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();
 	std::cout << "test passsed in " << dt_ms << "ms" << std::endl;
@@ -580,12 +653,15 @@ NOINLINE long long __tree_stress_random() {
 	auto t0 = std::chrono::high_resolution_clock::now();
 	for (int i = 0; i < nodes; i++) {
 		tree.insert((int)gen());
-	} while (!keys.empty()) {
+	}
+	
+	while (!keys.empty()) {
 		auto index = gen() % keys.size();
 		std::swap(keys.back(), keys[index]);
 		tree.remove(keys.back());
 		keys.pop_back();
-	} auto t1 = std::chrono::high_resolution_clock::now();
+	}
+	auto t1 = std::chrono::high_resolution_clock::now();
 
 	auto dt_ms = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();
 	std::cout << "test passsed in " << dt_ms << "ms" << std::endl;
@@ -608,12 +684,15 @@ NOINLINE long long __std_set_stress_random() {
 	auto t0 = std::chrono::high_resolution_clock::now();
 	for (int i = 0; i < nodes; i++) {
 		tree.insert((int)gen());
-	} while (!keys.empty()) {
+	}
+	
+	while (!keys.empty()) {
 		auto index = gen() % keys.size();
 		std::swap(keys.back(), keys[index]);
 		tree.erase(keys.back());
 		keys.pop_back();
-	} auto t1 = std::chrono::high_resolution_clock::now();
+	}
+	auto t1 = std::chrono::high_resolution_clock::now();
 
 	auto dt_ms = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();
 	std::cout << "test passsed in " << dt_ms << "ms" << std::endl;
@@ -628,24 +707,41 @@ int main(int argc, char* argv[]) {
 	try {
 		if (tree_test1()) {
 			return -1;
-		} if (tree_test2()) {
+		}
+		
+		if (tree_test2()) {
 			return -1;
-		} if (tree_test3()) {
+		}
+		
+		if (tree_test3()) {
 			return -1;
-		} /*if (tree_factorial_test()) {
+		}
+		
+		/*if (tree_factorial_test()) {
 			return -1;
-		} if (tree_full_factorial_test()) {
+		}
+		
+		if (tree_full_factorial_test()) {
 			return -1;
-		} */if (tree_stress_test() || tree_stress_test1()) {
+		}*/
+		
+		if (tree_stress_test() || tree_stress_test1()) {
 			return -1;
-		} if (stress_test_std_set() || stress_test_std_set1()) {
+		}
+		
+		if (stress_test_std_set() || stress_test_std_set1()) {
 			return -1;
-		} if (tree_stress_random() || std_set_stress_random()) {
+		}
+		
+		if (tree_stress_random() || std_set_stress_random()) {
 			return -1;
-		} return 0;
+		}
+		
+		return 0;
 	} catch (std::runtime_error& err) {
 		std::cerr << "testing failed: " << err.what() << std::endl;
 	} catch (...) {
 		std::cerr << "unknown error" << std::endl;
-	} return -1;
+	}
+	return -1;
 }

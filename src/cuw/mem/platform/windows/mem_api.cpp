@@ -13,7 +13,8 @@ namespace cuw::mem {
 	value_status_t<void*, int> allocate_sysmem(std::size_t size) {
 		if (void* ptr = VirtualAlloc(nullptr, size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE)) {
 			return {ptr, 0};
-		} return {nullptr, -1};
+		}
+		return {nullptr, -1};
 	}
 
 	int deallocate_sysmem(void* ptr, std::size_t size) {

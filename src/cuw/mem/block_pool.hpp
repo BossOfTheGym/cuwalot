@@ -19,7 +19,7 @@ namespace cuw::mem {
 		using bpl_t = block_pool_list_t;
 
 		static bp_t* list_entry_to_block(bpl_t* list) {
-			return base_to_obj(list, bp_t, list_entry);
+			return list ? base_to_obj(list, bp_t, list_entry) : nullptr;
 		}
 
 		// offset is zero-based and means offset from the first possible allocated block (not primary block)
@@ -84,7 +84,9 @@ namespace cuw::mem {
 				pool->count++;
 			} else {
 				return {nullptr, block_pool_head_empty};
-			} return {block, index};
+			}
+
+			return {block, index};
 		}
 
 		// index is zero-based, zero block is the first block after pool block
@@ -154,9 +156,7 @@ namespace cuw::mem {
 		}
 
 		bp_t* peek() const {
-			if (bpl_t* bpl = base_t::peek()) {
-				return bp_t::list_entry_to_block(bpl);
-			} return nullptr;
+			return bp_t::list_entry_to_block(base_t::peek());
 		}
 
 		// bool func(bp_t*)
@@ -202,11 +202,6 @@ namespace cuw::mem {
 			return free_entries.peek();
 		}
 
-		void adopt(block_pool_cache_t& another) {
-			full_entries.adopt(another.full_entries);
-			free_entries.adopt(another.free_entries);
-		}
-
 		// bool func(bp_t*)
 		template<class func_t>
 		void release_all(func_t func) {
@@ -242,7 +237,8 @@ namespace cuw::mem {
 				(base_t&)*this = std::move(another);
 				total_capacity = std::exchange(another.total_capacity, 0);
 				count = std::exchange(another.count, 0);
-			} return *this;
+			}
+			return *this;
 		}
 
 		bp_t* create_pool(void* mem, std::size_t size) {
@@ -251,7 +247,11 @@ namespace cuw::mem {
 			assert(is_aligned(mem, block_size));
 
 			std::size_t capacity = std::min<std::size_t>(max_pool_blocks, size / block_size - 1);
-			bp_t* bp = new (mem) bp_t { .size = size, .capacity = capacity, .head = block_pool_head_empty };
+
+			bp_t* bp = new (mem) bp_t {
+				.size = size, .capacity = capacity, .head = block_pool_head_empty
+			};
+
 			base_t::insert(bp);
 			total_capacity += capacity;
 			return bp;
@@ -267,9 +267,12 @@ namespace cuw::mem {
 			block_pool_wrapper_t pool{bp};
 			auto [data, offset] = pool.acquire();
 			++count;
+
 			if (pool.full()) {
 				base_t::reinsert_full(bp);
-			} return {data, offset};
+			}
+			
+			return {data, offset};
 		}
 
 		// returns pool descriptor(block_pool) when it becomes empty
@@ -281,9 +284,12 @@ namespace cuw::mem {
 			bool was_full = pool.full();
 			pool.release(block_mem, block_offset);
 			--count;
+			
 			if (was_full || mode == block_pool_release_mode_t::ReinsertFree) {
 				base_t::reinsert_free(primary_block);
-			} return pool.empty() ? primary_block : nullptr;
+			}
+			
+			return pool.empty() ? primary_block : nullptr;
 		}
 
 		// void func(void* mem, std::size_t size)
@@ -292,12 +298,6 @@ namespace cuw::mem {
 			base_t::erase(bp);
 			total_capacity -= bp->capacity;
 			func(bp->get_data(), bp->get_size());
-		}
-
-		void adopt(block_pool_entry_t& another) {
-			base_t::adopt(another);
-			count += another.count;
-			another.count = 0;
 		}
 
 		// bool func(void* mem, std::size_t size)

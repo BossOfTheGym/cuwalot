@@ -2,6 +2,7 @@
 Tree-based memory allocator. Utilizes red-black trees. The best allocator in the universe that is... under construction yet.
 
 **TODO**
+- remove TODO
 - change shitty codestyle
 - rework little bit alloc_traits: remove ugly repetition
 - cppguidelines

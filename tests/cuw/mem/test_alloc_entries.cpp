@@ -8,9 +8,10 @@ using namespace cuw;
 using ad_t = mem::alloc_descr_t; 
 
 namespace {
-	template<mem::pool_chunk_size_t chunk_enum, std::size_t total_chunks = 4>
-	int test_entries_impl() {
-		constexpr std::size_t chunk_size = mem::pool_chunk_size((std::size_t)chunk_enum);
+	template<std::size_t chunk_size_log2, std::size_t total_chunks>
+	int test_entries_impl(std::size_t chunk_size_log2) {
+		constexpr std::size_t chunk_size = mem::value_to_pow2(chunk_size_log2);
+		constexpr std::size_t chunk_alignment = chunk_size;
 		constexpr std::size_t total_pools = 4;
 		constexpr std::size_t pool_capacity = total_chunks;
 		constexpr std::size_t pool_size = chunk_size * total_chunks;
@@ -18,19 +19,20 @@ namespace {
 		constexpr std::size_t total_allocations = total_pools * pool_capacity;
 		constexpr std::size_t lookups = 2;
 
-		alignas(chunk_size) std::uint8_t data[total_memory] = {};
+		alignas(chunk_alignment) std::uint8_t data[total_memory] = {};
 		alignas(mem::block_align) ad_t descrs[total_pools] = {};
 		void* allocated[total_allocations] = {};
 
 		std::size_t curr_descr = 0;
 
-		mem::pool_entry_t entry(chunk_enum, chunk_size);
+		mem::pool_entry_t entry(chunk_size_log2, chunk_alignment);
 
 		auto try_create_empty = [&] () {
 			if (curr_descr == total_pools) {
 				std::cerr << "no more pools available" << std::endl;
 				return false;
 			}
+
 			std::size_t offset = curr_descr++;
 			ad_t* descr = entry.create(&descrs[offset], offset, pool_size, total_chunks, data + offset * pool_size);
 			std::cout << "created descr: " << print_ad_t{descr} << std::endl;
@@ -62,10 +64,12 @@ namespace {
 				std::cerr << "invalid check value" << std::endl;
 				std::abort();
 			}
+
 			std::cout << "deallocating: " << pretty(chunk) << std::endl;
 			if (auto [descr, ptr_released] = entry.release({}, chunk, -1); descr) {
 				std::cout << "descr " << print_ad_t{descr} << " is now empty" << std::endl;
-			} chunk = nullptr;
+			}
+			chunk = nullptr;
 		};
 
 		auto check_invalid_allocation = [&] () {
@@ -126,21 +130,35 @@ namespace {
 	}
 
 	int test_entries() {
-		if (test_entries_impl<mem::pool_chunk_size_t::Bytes2>()) {
+		if (test_entries_impl<1, 4>()) {
 			return -1;
-		} if (test_entries_impl<mem::pool_chunk_size_t::Bytes4>()) {
+		}
+		
+		if (test_entries_impl<2, 4>()) {
 			return -1;
-		} if (test_entries_impl<mem::pool_chunk_size_t::Bytes8>()) {
+		}
+		
+		if (test_entries_impl<3, 4>()) {
 			return -1;
-		} if (test_entries_impl<mem::pool_chunk_size_t::Bytes16>()) {
+		}
+		
+		if (test_entries_impl<4, 4>()) {
 			return -1;
-		} if (test_entries_impl<mem::pool_chunk_size_t::Bytes32>()) {
+		}
+		
+		if (test_entries_impl<5, 4>()) {
 			return -1;
-		} if (test_entries_impl<mem::pool_chunk_size_t::Bytes64>()) {
+		}
+		
+		if (test_entries_impl<6, 4>()) {
 			return -1;
-		} if (test_entries_impl<mem::pool_chunk_size_t::Bytes128>()) {
+		}
+		
+		if (test_entries_impl<7, 4>()) {
 			return -1;
-		} return 0;
+		}
+		
+		return 0;
 	}
 }
 

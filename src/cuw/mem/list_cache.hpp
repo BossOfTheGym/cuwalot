@@ -20,7 +20,8 @@ namespace cuw::mem {
 		list_cache_t& operator = (list_cache_t&& another) noexcept {
 			if (this != &another) { // best fucking practice if you have paranoia like I do
 				list::move_head(&another.entry, &entry);
-			} return *this;
+			}
+			return *this;
 		}
  
 		list_cache_t(const list_cache_t&) = delete;
@@ -48,15 +49,8 @@ namespace cuw::mem {
 		entry_t* peek() const {
 			if (!list::empty(&entry)) {
 				return entry.next;
-			} return nullptr;
-		}
-
-		void adopt(list_cache_t& another) {
-			list::append(&entry, &another.entry);
-		}
-
-		void split(int first, list_cache_t& part1, list_cache_t& part2) {
-			list::split(&entry, first, &part1.entry, &part2.entry);
+			}
+			return nullptr;
 		}
 
 		// bool func(entry_t*)
@@ -67,8 +61,10 @@ namespace cuw::mem {
 			while (curr != head) {
 				if (func(curr)) {
 					return curr;					
-				} curr = curr->next;
-			} return nullptr;
+				}
+				curr = curr->next;
+			}
+			return nullptr;
 		}
 
 		// void func(entry_t*)
@@ -98,8 +94,10 @@ namespace cuw::mem {
 					++released;
 				} else {
 					prev = curr;
-				} curr = next;
-			} return released;
+				}
+				curr = next;
+			}
+			return released;
 		}
 
 		void reset() {

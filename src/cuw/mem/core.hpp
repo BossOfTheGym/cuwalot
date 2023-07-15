@@ -52,6 +52,12 @@ namespace cuw::mem {
 	inline constexpr attrs_t default_min_pool_size = (attrs_t)1 << default_min_pool_power;
 	inline constexpr attrs_t default_max_pool_size = (attrs_t)1 << default_max_pool_power;
 
+	inline constexpr attrs_t default_min_chunk_size_log2 = 1;
+	inline constexpr attrs_t default_max_chunk_size_log2 = 16;
+	inline constexpr attrs_t max_possible_chunk_size_log2 = 31;
+
+	inline constexpr attrs_t default_raw_bin_count = 16;
+
 	inline constexpr int default_pool_cache_lookups = 6; // lookups in free_list to access chunk(to realloc or free)
 	inline constexpr int default_raw_cache_lookups = 10; // lookups in a list of raw allocations(to realloc or free)
 
@@ -84,69 +90,36 @@ namespace cuw::mem {
 	template<class type_t>
 	inline constexpr bool do_fits_block = (sizeof(type_t) == block_size);
 
-	enum block_type_t : attrs_t {
+	enum class block_type_t : attrs_t {
 		Pool = 0, // pool of chunks
 		Raw, // raw allocation: this is just continious block of memory
 	};
 
 	inline constexpr attrs_t chunk_size_empty = ~0;
-
-	// each pool stores chunks aligned to the min(chunk_size, some_max_alignment)
-	// max_alignment is usually a page_size 
-	// Bytes1 can't be used as a valid chunk_size value but rather as an alignment value by Raw allocations 
-	enum class pool_chunk_size_t : attrs_t {
-		Empty = chunk_size_empty,
-		Min = 0,
-		Bytes1 = 0,
-		Bytes2,
-		Bytes4,
-		Bytes8,
-		Bytes16,
-		Bytes32,
-		Bytes64,
-		Bytes128,
-		Bytes256,
-		Bytes512,
-		Bytes1024,
-		Bytes2048,
-		Bytes4096,
-		Bytes8192,
-		Max = Bytes8192,
-	};
-
-	inline constexpr auto default_pool_first_chunk = pool_chunk_size_t::Bytes2;
-	inline constexpr auto default_pool_last_chunk = pool_chunk_size_t::Max; 
+	inline constexpr attrs_t min_alloc_size = 2;  
+	inline constexpr attrs_t default_total_raw_bins = 24;
 
 	template<class int_t>
-	constexpr int_t pool_chunk_size(int_t value) {
+	constexpr int_t value_to_pow2(int_t value) {
 		return (int_t)1 << (int_t)value;
 	}
 
 	template<class int_t>
-	constexpr int_t pool_alignment(int_t value) {
-		return pool_chunk_size(value);
-	}
-
-	template<class int_t>
-	constexpr int_t max_pool_chunk_size() {
-		return pool_chunk_size<int_t>((int_t)pool_chunk_size_t::Max);
+	constexpr int_t mul_by_pow2(int_t value, int_t pow2) {
+		return value << pow2;
 	}
 
 	template<class type_t, class int_t>
-	constexpr int_t type_to_pool_chunk() {
+	constexpr int_t sizeof_to_log2() {
 		static_assert(std::has_single_bit(sizeof(type_t)));
 		return std::countr_zero(sizeof(type_t));
 	}
 
 	template<class int_t>
-	constexpr int_t value_to_pool_chunk(int_t value) {
+	constexpr int_t value_to_log2(int_t value) {
 		assert(std::has_single_bit(value));
 		return std::countr_zero(value);
 	}
-
-
-	inline constexpr attrs_t default_total_raw_bins = 24;
-
 
 	template<class int_t>
 	constexpr bool is_alignment(int_t value) {
@@ -176,17 +149,12 @@ namespace cuw::mem {
 		return (ptr_t*)align_value((std::uintptr_t)ptr, alignment);
 	}
 
-	template <typename enum_t>
-	constexpr auto enum_to_value(enum_t e) noexcept {
-		return static_cast<std::underlying_type_t<enum_t>>(e);
-	}
-
 	// can be used to check if traits struct contains appropriate constexpr field
 	template<class option_t, class type_t>
 	using enable_option_t = std::enable_if_t<std::is_convertible_v<type_t, option_t>>;
 
 	// simple pool header
 	struct pool_hdr_t {
-		std::uint16_t next; // not initialized
+		std::uint16_t next; // not initialized on purpose
 	};
 }

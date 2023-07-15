@@ -167,7 +167,8 @@ namespace cuw::mem {
 		descr_t* acquire(void* data, std::size_t size) {
 			if (auto [ptr, offset] = base_t::acquire(); ptr) {
 				return new (ptr) descr_t { .offset = offset, .size = size, .data = data };
-			} return nullptr;
+			}
+			return nullptr;
 		}
 
 		bp_t* release(descr_t* fbd, block_pool_release_mode_t mode) {
@@ -221,55 +222,6 @@ namespace cuw::mem {
 		page_alloc_t& operator = (const page_alloc_t&) = delete;
 		page_alloc_t& operator = (page_alloc_t&&) = delete;
 
-	private:
-		void merge_smds(page_alloc_t& another) {
-			addr_index_t* merge_addr_into = smd_addr;
-			addr_index_t* merge_addr_from = another.smd_addr;
-			if (smd_entry.get_count() < another.smd_entry.get_count()) {
-				std::swap(merge_addr_from, merge_addr_into);
-			}
-
-			bst::traverse_inorder(merge_addr_from, [&] (addr_index_t* node) {
-				merge_addr_into = trb::insert_lb(merge_addr_into, node, smd_t::addr_index_search_t{});
-			});
-
-			smd_entry.adopt(another.smd_entry);
-			smd_addr = merge_addr_into;
-			another.smd_addr = nullptr;
-		}
-
-		void merge_fbds(page_alloc_t& another) {
-			std::size_t a = fbd_entry.get_count();
-			std::size_t b = another.fbd_entry.get_count();
-			
-			fbd_entry.adopt(another.fbd_entry);
-			if (a < b) {
-				std::swap(fbd_addr, another.fbd_addr);
-				std::swap(fbd_size, another.fbd_size);
-			}
-
-			bst::traverse_inorder(another.fbd_addr, [&] (addr_index_t* node) {
-				fbd_t* fbd = fbd_t::addr_index_to_descr(node);
-				void* ptr = fbd->get_start();
-				std::size_t size = fbd->get_size();
-				free_fbd(fbd, block_pool_release_mode_t::NoReinsertFree);
-				insert_free_block(ptr, size);
-			});
-
-			another.fbd_addr = nullptr;
-			another.fbd_size = nullptr;
-		}
-
-	public:
-		void adopt(page_alloc_t& another) {
-			if (this == &another) {
-				return;
-			}
-			base_t::adopt(another);
-			merge_smds(another);
-			merge_fbds(another);
-		}
-
 		// mostly for debugging purposes
 		void release_mem() {
 			fbd_addr = nullptr;
@@ -283,6 +235,7 @@ namespace cuw::mem {
 				smd_t* smd = smd_t::addr_index_to_descr(node);
 				base_t::deallocate(smd->get_start(), smd->get_size());
 			});
+			
 			smd_addr = nullptr;
 			smd_entry.release_all([&] (void* block, std::size_t size) {
 				base_t::deallocate(block, size);
@@ -349,7 +302,9 @@ namespace cuw::mem {
 			if (pool_data) {
 				fbd_entry.create_pool(pool_data, pool_size);
 				return fbd_entry.acquire(data, size);
-			} return nullptr;
+			}
+
+			return nullptr;
 		}
 
 		void free_fbd(fbd_t* fbd, block_pool_release_mode_t mode = block_pool_release_mode_t::ReinsertFree) {
@@ -373,7 +328,9 @@ namespace cuw::mem {
 			} else { // size will be zero, completely remove it from the free list
 				fbd_addr = trb::remove(fbd_addr, &fbd->addr_index);
 				free_fbd(fbd);
-			} return ptr;
+			}
+
+			return ptr;
 		}
 
 		[[nodiscard]] void* shrink_fbd_right(fbd_t* fbd, std::size_t size) {
@@ -388,7 +345,9 @@ namespace cuw::mem {
 			} else { // size will be zero, completely remove it from the free list
 				fbd_addr = trb::remove(fbd_addr, &fbd->addr_index);
 				free_fbd(fbd);
-			} return ptr;
+			}
+
+			return ptr;
 		}
 
 	private:
@@ -428,7 +387,8 @@ namespace cuw::mem {
 				left_node = ins_pos_node;
 			} else {
 				left_node = bst::predecessor(lb_node);
-			} left = fbd_t::addr_index_to_descr(left_node);
+			}
+			left = fbd_t::addr_index_to_descr(left_node);
 
 			fbd_t dummy = { .size = size, .data = ptr };
 			if (left && fbd_t::overlaps(&dummy, left) || right && fbd_t::overlaps(&dummy, right)) {
@@ -475,7 +435,8 @@ namespace cuw::mem {
 					// is already coalesced with the left block then remove right block from the addr index
 					fbd_addr = trb::remove(fbd_addr, &coalesced_block->addr_index);
 					free_fbd(coalesced_block);
-				} coalesced_block = info.right;
+				}
+				coalesced_block = info.right;
 			}
 
 			if (info.requires_fbd_alloc()) {
@@ -483,7 +444,9 @@ namespace cuw::mem {
 				// block does not coalesce with any of the blocks so we must insert in into the addr index
 				assert(!is_dummy);
 				fbd_addr = trb::insert_lb_hint(fbd_addr, &coalesced_block->addr_index, &info.ins_pos->addr_index, fbd_t::addr_index_search_t{});
-			} return coalesced_block;
+			}
+
+			return coalesced_block;
 		}
 
 		void walk_free_smds(fbd_t* coalesced_block, void* ptr_hint) {
@@ -553,7 +516,8 @@ namespace cuw::mem {
 				fbd_t* fbd = alloc_fbd(ptr, size);
 				if (!fbd) {
 					std::abort();
-				} coalesced_block = coalesce_free_block(info, fbd, false);
+				}
+				coalesced_block = coalesce_free_block(info, fbd, false);
 			} else {
 				fbd_t dummy{ .size = size, .data = ptr };
 				coalesced_block = coalesce_free_block(info, &dummy, true);
@@ -582,7 +546,9 @@ namespace cuw::mem {
 
 			if (addr_index_t* found = bst::lower_bound(fbd_size, size, fbd_t::size_index_search_t{})) {
 				return bite_free_block(fbd_t::size_index_to_descr(found), size);
-			} return nullptr;
+			}
+
+			return nullptr;
 		}
 
 		// always allocates fbd for the remaining memory as a simplification
@@ -597,7 +563,8 @@ namespace cuw::mem {
 				smd = alloc_memory(size); // fallback
 				if (!smd) {
 					return nullptr;
-				} size_ext = size;
+				}
+				size_ext = size;
 			}
 
 			void* rest_ptr = (char*)smd->data + size;
@@ -605,6 +572,7 @@ namespace cuw::mem {
 			if (rest_size == 0) {
 				return smd->data;
 			}
+
 			insert_free_block(rest_ptr, rest_size);
 			return smd->data;
 		}
@@ -613,7 +581,9 @@ namespace cuw::mem {
 			assert(is_aligned(size, page_size));
 			if (void* ptr = try_alloc_from_existing(size)) {
 				return ptr;
-			} return try_alloc_by_extend(size);
+			}
+			
+			return try_alloc_by_extend(size);
 		}
 
 	public:
@@ -652,11 +622,15 @@ namespace cuw::mem {
 					void* dummy = bite_free_block(block, delta); // next allocated block is neighbour to us
 					return old_ptr;
 				}
-			} if (void* new_ptr = this_t::allocate(new_size)) {
+			}
+			
+			if (void* new_ptr = this_t::allocate(new_size)) {
 				std::memcpy(new_ptr, old_ptr, old_size);
 				this_t::deallocate(old_ptr, old_size);
 				return new_ptr;
-			} return nullptr;
+			}
+			
+			return nullptr;
 		}
 
 	public:

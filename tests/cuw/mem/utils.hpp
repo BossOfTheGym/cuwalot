@@ -74,14 +74,19 @@ namespace {
 					os << std::hex << std::setfill('0') << std::setw(2) << (int)(*ptr);
 					++ptr;
 					--size;
-				} if (size == 0) {
+				}
+				
+				if (size == 0) {
 					return;
-				} if (i != view.groups_per_line - 1) {
+				}
+				
+				if (i != view.groups_per_line - 1) {
 					os << ' ';
 				} else {
 					os << std::endl;
 				}
-			} if (size == 0) {
+			}
+			if (size == 0) {
 				return;
 			}
 
@@ -93,7 +98,8 @@ namespace {
 
 		while (size > 0) {
 			try_print_line();
-		} return os;
+		}
+		return os;
 	}
 
 	struct print_range_t {
@@ -112,7 +118,8 @@ namespace {
 	std::ostream& operator << (std::ostream& os, const print_ad_t& print) {
 		if (print.descr) {
 			return os << print_range_t{print.descr->get_data(), print.descr->get_size()};
-		} return os << "[null descr]";
+		}
+		return os << "[null descr]";
 	}
 
 	template<class fbd_t>
@@ -132,7 +139,8 @@ namespace {
 		friend std::ostream& operator << (std::ostream& os, const addr_index_info_t& nodes) {
 			for (auto index : nodes.alloc.get_addr_index()) {
 				os << fbd_info_t{mem::free_block_descr_t::addr_index_to_descr(index)} << std::endl;
-			} return os;
+			}
+			return os;
 		}
 
 		page_alloc_t& alloc;
@@ -186,7 +194,9 @@ namespace {
 			std::memcpy(ptr, deadbeef, 4);
 			ptr = (char*)ptr + 4;
 			size -= 4;
-		} if (size > 0) {
+		}
+		
+		if (size > 0) {
 			std::memcpy(ptr, deadbeef, size);
 		}
 	}

@@ -95,7 +95,8 @@ private:
 			} else {
 				return false;
 			}
-		} return true;
+		}
+		return true;
 	}
 
 public:
@@ -124,6 +125,7 @@ public:
 		if (!try_get_head_chunk()) {
 			return nullptr;
 		}
+		
 		void* next = std::launder(reinterpret_cast<entry_t*>(head))->next;
 		type_t* obj;
 		if constexpr(std::is_aggregate_v<type_t>) {

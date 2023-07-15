@@ -39,6 +39,7 @@ void test_random_stuff(malloc_func_t&& malloc_func, free_func_t&& free_func) {
 		void* ptr = malloc_func(size);
 		allocations.push_back({ptr, size});
 	}
+
 	for (auto [ptr, size] : allocations) {
 		free_func(ptr, size);
 	}
@@ -51,6 +52,7 @@ void test_std_alloc(int k) {
 	auto std_malloc_func = [](std::size_t size) {
 		return std::malloc(size);
 	};
+
 	auto std_free_func = [](void* ptr, std::size_t size) {
 		std::free(ptr);
 	};
@@ -59,6 +61,7 @@ void test_std_alloc(int k) {
 	for (int i = 0; i < k; i++) {
 		test_random_stuff(std_malloc_func, std_free_func);
 	}
+
 	std::cout << std::endl;
 }
 
@@ -66,6 +69,7 @@ void test_cuw_alloc(int k) {
 	auto cuw_malloc_func = [](std::size_t size) {
 		return cuw::mem::malloc_ext(size);
 	};
+	
 	auto cuw_free_func = [](void* ptr, std::size_t size) {
 		cuw::mem::free_ext(ptr, size);
 	};

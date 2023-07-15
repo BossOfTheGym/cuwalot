@@ -17,11 +17,11 @@ namespace {
 
 	class test_ad_t {
 	public:
-		test_ad_t(attrs_t type, attrs_t chunk_enum, std::size_t chunk_size, std::size_t size, void* data) {
+		test_ad_t(attrs_t type, attrs_t chunk_size_log2, std::size_t chunk_size, std::size_t size, void* data) {
 			std::size_t capacity = size / chunk_size;
 			descr = ad_t {
 				.size = size,
-				.type = type, .chunk_size = chunk_enum, .capacity = capacity, .head = mem::alloc_descr_head_empty,
+				.type = type, .chunk_size = chunk_size_log2, .capacity = capacity, .head = mem::alloc_descr_head_empty,
 				.data = data
 			};
 		}
@@ -54,10 +54,10 @@ namespace {
 		return test_ad_t((attrs_t)mem::block_type_t::Pool, (attrs_t)chunk_size, mem::pool_chunk_size((attrs_t)chunk_size), size, data);
 	}
 
-	template<mem::pool_chunk_size_t chunk_enum, attrs_t total_chunks = 4>
+	template<attrs_t chunk_size_log2, attrs_t total_chunks>
 	int test_pool_wrapper() {
-		constexpr attrs_t chunk_align = mem::pool_alignment((attrs_t)chunk_enum);
-		constexpr attrs_t chunk_size = mem::pool_chunk_size((attrs_t)chunk_enum);
+		constexpr attrs_t chunk_align = mem::value_to_pow2(chunk_size_log2);
+		constexpr attrs_t chunk_size = mem::value_to_pow2(chunk_size_log2);
 		constexpr attrs_t total_size = total_chunks * chunk_size;
 		constexpr attrs_t lines_per_block = chunk_size / (mem_view_t::default_groups_per_line * mem_view_t::default_bytes_per_group);
 
@@ -74,6 +74,7 @@ namespace {
 				std::cerr << "something went wrong..." << std::endl;
 				std::abort();
 			}
+
 			std::memset(chunk, value, chunk_size);
 			std::cout << "allocated: " << (void*)chunk << std::endl;
 		};
@@ -85,6 +86,7 @@ namespace {
 				std::cerr << "invalid check value" << std::endl;
 				std::abort();
 			}
+
 			wrapper.release_chunk(chunk);
 			std::cout << "deallocated: " << (void*)chunk << std::endl;
 			chunk = nullptr;
@@ -109,36 +111,42 @@ namespace {
 		std::cout << "deallocating all.." << std::endl;
 		for (int i = 0; i < total_chunks; i++) {
 			deallocate(allocated[i], i);
-		} std::cout << std::endl;
+		}
+		std::cout << std::endl;
 
 		std::cout << "allocating all..." << std::endl;
 		for (int i = 0; i < total_chunks; i++) {
 			allocate(allocated[i], i);
-		} std::cout << std::endl;
+		}
+		std::cout << std::endl;
 
 		check_invalid_allocation();
 
 		std::cout << "deallocating even..." << std::endl;
 		for (int i = 0; i < total_chunks; i += 2) {
 			deallocate(allocated[i], i);
-		} std::cout << std::endl;
+		}
+		std::cout << std::endl;
 
 		std::cout << "deallocating odd..." << std::endl;
 		for (int i = 1; i < total_chunks; i += 2) {
 			deallocate(allocated[i], i);
-		} std::cout << std::endl;
+		}
+		std::cout << std::endl;
 
 		std::cout << "allocating all..." << std::endl;
 		for (int i = 0; i < total_chunks; i++) {
 			allocate(allocated[i], i);
-		} std::cout << std::endl;
+		}
+		std::cout << std::endl;
 
 		check_invalid_allocation();
 
 		std::cout << "deallocating all.." << std::endl;
 		for (int i = 0; i < total_chunks; i++) {
 			deallocate(allocated[i], i);
-		} std::cout << std::endl;
+		}
+		std::cout << std::endl;
 
 		std::cout << "final memory view: " << std::endl << mem_view_t{data, total_size, lines_per_block} << std::endl;
 
@@ -148,26 +156,38 @@ namespace {
 	}
 
 	int test_pool_wrapper() {
-		if (test_pool_wrapper<mem::pool_chunk_size_t::Bytes2>()) {
+		if (test_pool_wrapper<1, 4>()) {
 			return -1;
-		} if (test_pool_wrapper<mem::pool_chunk_size_t::Bytes4>()) {
+		}
+		
+		if (test_pool_wrapper<2, 4>()) {
 			return -1;
-		} if (test_pool_wrapper<mem::pool_chunk_size_t::Bytes8>()) {
+		}
+		
+		if (test_pool_wrapper<3, 4>()) {
 			return -1;
-		} if (test_pool_wrapper<mem::pool_chunk_size_t::Bytes16>()) {
+		}
+		
+		if (test_pool_wrapper<4, 4>()) {
 			return -1;
-		} if (test_pool_wrapper<mem::pool_chunk_size_t::Bytes32>()) {
+		}
+		
+		if (test_pool_wrapper<5, 4>()) {
 			return -1;
-		} if (test_pool_wrapper<mem::pool_chunk_size_t::Bytes64>()) {
+		}
+		
+		if (test_pool_wrapper<6, 4>()) {
 			return -1;
-		} if (test_pool_wrapper<mem::pool_chunk_size_t::Bytes128>()) {
+		}
+		
+		if (test_pool_wrapper<7, 4>()) {
 			return -1;
-		} return 0;
+		}
+		
+		return 0;
 	}
 }
 
 int main() {
-	if (test_pool_wrapper()) {
-		return -1;
-	} return 0;
+	return test_pool_wrapper();
 }

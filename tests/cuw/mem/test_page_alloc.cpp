@@ -250,94 +250,6 @@ namespace {
 		return 0;
 	}
 
-	int test_adopt() {
-		std::cout << "testing adoption" << std::endl;
-		
-		using common_alloc_t = basic_alloc_t<1, 3, 3, 4>;
-		using seq_alloc_t = scenario_alloc_t<common_alloc_t>;
-		using proxy_alloc_t = dummy_alloc_proxy_t<seq_alloc_t>;
-		using alloc_t = mem::page_alloc_t<proxy_alloc_t>;
-
-		// 28 blocks
-		common_alloc_t common_alloc(block_size_t{28}, block_size_t{1});
-		void* start = common_alloc.get_alloc_ranges().begin()->ptr;
-		void* allocated{};
-
-		seq_alloc_t seq_alloc(common_alloc, {
-			alloc_request_t::allocate(block_size_t{3}, block_mem_t{start, 0}), // 1
-			alloc_request_t::allocate(block_size_t{4}, block_mem_t{start, 3}), // 1
-			alloc_request_t::allocate(block_size_t{3}, block_mem_t{start, 11}), // 1
-			alloc_request_t::allocate(block_size_t{4}, block_mem_t{start, 17}), // 1
-			alloc_request_t::allocate(block_size_t{3}, block_mem_t{start, 14}), // 2
-			alloc_request_t::allocate(block_size_t{4}, block_mem_t{start, 7}), // 2
-			alloc_request_t::allocate(block_size_t{4}, block_mem_t{start, 21}), // 2
-			alloc_request_t::allocate(block_size_t{3}, block_mem_t{start, 25}), // 2
-		});
-
-		alloc_t alloc1(seq_alloc);
-		alloc_t alloc2(seq_alloc);
-
-		// ............................
-		// uuuuuuuuuuuuuuuuuuuuuuuuuuuu 1. alloc 4 (allocates 3,4)
-		allocated = alloc1.allocate(block_size_t{4});
-		check_allocation(allocated, block_mem_t{start, 3});
-
-		// 1..1........................
-		// sxo----uuuuuuuuuuuuuuuuuuuuu 1. deallocate 2 (allocates 3)
-		alloc1.deallocate(block_mem_t{start, 5}, block_size_t{2});
-
-		// 1..1.1.....1................
-		// sxx--++uuuufxouuuuuuuuuuuuuu 1. alloc 4 (allocates 4)
-		allocated = alloc1.allocate(block_size_t{4});
-		check_allocation(allocated, block_mem_t{start, 17});
-
-		// 1..1.1.....1.....1..........
-		// sxx--++uuuufxouuu----uuuuuuu 1. deallocate 2
-		alloc1.deallocate(block_mem_t{start, 19}, block_size_t{2});
-
-		// 1..1.1.....1.....1.1........
-		// sxx--++uuuufxxuuu--++uuuuuuu 2. alloc 4 (allocates 3,4)
-		allocated = alloc2.allocate(block_size_t{4});
-		check_allocation(allocated, block_mem_t{start, 7});
-
-		// 1..1.1.2...1..2..1.1........
-		// sxx--++----fxxsxo--++uuuuuuu 2. alloc 4 (allocates 4)
-		allocated = alloc2.allocate(block_size_t{4});
-		check_allocation(allocated, block_mem_t{start, 21});
-
-		// 1..1.1.2...1..2..1.1.2......
-		// sxx--++----fxxsxx--++----uuu 2. deallocate 2 (allocates 3)
-		alloc2.deallocate(block_mem_t{start, 7}, block_size_t{2});
-
-		// 1..1.1.2.2.1..2..1.1.2...2..
-		// sxx--++++--fxxsxx--++----fxo 2. deallocate 2
-		alloc2.deallocate(block_mem_t{start, 21}, block_size_t{2});
-
-		// 1..1.1.2.2.1..2..1.1.2.2.2..
-		// sxx--++++--fxxsxx--++++--fxx
-		alloc1.adopt(alloc2);
-
-		// sxx--++++--fxxsxx--++++--uuu deallocate 2
-		alloc1.deallocate(block_mem_t{start, 9}, block_size_t{2});
-
-		// sxx--++uuuufxxsxo--++++--uuu deallocate 2
-		alloc1.deallocate(block_mem_t{start, 23}, block_size_t{2});
-
-		// sxx--++uuuufxxuuu--++uuuuuuu deallocate 2
-		alloc1.deallocate(block_mem_t{start, 17}, block_size_t{2});
-
-		// sxx--++uuuufxouuuuuuuuuuuuuu deallocate 2
-		alloc1.deallocate(block_mem_t{start, 3}, block_size_t{2});
-
-		// uuuuuuuuuuuuuuuuuuuuuuuuuuuu
-		alloc1.release_mem(); // nothing must happen
-		alloc2.release_mem(); // nothing must happen
-
-		std::cout << "adoption test successfully finished" << std::endl << std::endl;
-
-		return 0;
-	}
-
 	struct allocation_t {
 		void* ptr{};
 		std::size_t size{};
@@ -402,19 +314,22 @@ namespace {
 				try_allocate();
 			} else {
 				try_deallocate();
-			} std::cout << std::endl;
+			}
+			std::cout << std::endl;
 		};
 
 		std::cout << std::endl;
 		for (int i = 0; i < total_commands; i++) {
 			exec_command(i);
-		} std::cout << std::endl;
+		}
+		std::cout << std::endl;
 
 		std::cout << "deallocating all..." << std::endl;
 		std::cout << "total allocations: " << allocations.size() << std::endl;
 		for (auto& [ptr, size] : allocations) {
 			alloc.deallocate(ptr, size);
-		} std::cout << std::endl;
+		}
+		std::cout << std::endl;
 
 		std::cout << "final status: " << std::endl;
 		print_status();
@@ -434,13 +349,19 @@ namespace {
 int main(int argc, char* argv[]) {
 	if (test_alloc1()) {
 		return -1;
-	} if (test_alloc2()) {
+	}
+	
+	if (test_alloc2()) {
 		return -1;
-	} if (test_realloc()) {
+	}
+	
+	if (test_realloc()) {
 		return -1;
-	} if (test_adopt()) {
+	}
+	
+	if (test_random_stuff()) {
 		return -1;
-	} if (test_random_stuff()) {
-		return -1;
-	} return 0;
+	}
+	
+	return 0;
 }

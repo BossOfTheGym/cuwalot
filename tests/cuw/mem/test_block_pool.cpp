@@ -40,7 +40,8 @@ namespace {
 			for (auto& primary_block : primary_blocks) {
 				if (!primary_block) {
 					continue;
-				} print_pool_stats(primary_block);
+				}
+				print_pool_stats(primary_block);
 			}
 		};
 
@@ -53,11 +54,15 @@ namespace {
 			print_pool_stats(primary_block);
 			for (int i = 0; i < mem_pool_blocks; i++) {
 				auto [block, offset] = entry.acquire();
-				assert(block);
+				if (!block) {
+					std::abort();
+				}
 			}
 			print_pool_stats(primary_block);
 			auto [block, offset] = entry.acquire();
-			assert(!block);
+			if (block) {
+				std::abort();
+			}
 		}
 		std::cout << std::endl;
 		print_stats();
@@ -68,14 +73,16 @@ namespace {
 				auto [block, offset] = get_block_alloc(primary_block, i);
 				entry.release(block, offset);
 			}
-		} print_stats();
+		}
+		print_stats();
 
 		std::cout << "allocating back blocks on even positions" << std::endl;
 		for (auto& primary_block : primary_blocks) {
 			for (int i = 0; i < mem_pool_blocks; i += 2) {
 				auto [block, offset] = entry.acquire();
 			}
-		} print_stats();
+		}
+		print_stats();
 
 		std::cout << "deallocating blocks on uneven positions" << std::endl;
 		for (auto& primary_block : primary_blocks) {
@@ -83,14 +90,16 @@ namespace {
 				auto [block, offset] = get_block_alloc(primary_block, i);
 				entry.release(block, offset);
 			}
-		} print_stats();
+		}
+		print_stats();
 
 		std::cout << "allocate blocks on uneven positions back" << std::endl;
 		for (auto& primary_block : primary_blocks) {
 			for (int i = 1; i < mem_pool_blocks; i += 2) {
 				auto [block, offset] = entry.acquire();
 			}
-		} print_stats();
+		}
+		print_stats();
 
 		std::cout << "deallocating all blocks" << std::endl;
 		for (auto& primary_block : primary_blocks) {
@@ -98,31 +107,48 @@ namespace {
 				auto [block, offset] = get_block_alloc(primary_block, i);
 				entry.release(block, offset);
 			}
-		} print_stats();
+		}
+		print_stats();
 		
 		int blocks_released = 0;
 		auto release_func = [&] (void* ptr, std::size_t size, int rem) {
 			auto found = std::find(std::begin(primary_blocks), std::end(primary_blocks), ptr);
-			assert(found != std::end(primary_blocks));
+			if (found == std::end(primary_blocks)) {
+				std::abort();
+			}
+
 			if ((found - std::begin(primary_blocks)) % 2 != rem) {
 				return false;
 			}
+
 			std::cout << "freeing primary_block: " << ptr << std::endl;
-			assert(ptr);
-			assert(size == mem_pool_size);
+
+			if (!ptr) {
+				std::abort();
+			}
+
+			if (size != mem_pool_size) {
+				std::abort();
+			}
+
 			*found = nullptr;
 			++blocks_released;
 			return true;
 		};
+
 		std::cout << "releasing all even primary blocks" << std::endl;
 		entry.release_all([&] (void* ptr, std::size_t size) { // release even blocks
 			return release_func(ptr, size, 0);
 		});
+
 		std::cout << "releasing all uneven primary blocks" << std::endl;
 		entry.release_all([&] (void* ptr, std::size_t size) { // release uneven blocks
 			return release_func(ptr, size, 1);
 		});
-		assert(blocks_released == max_primary_blocks);
+
+		if (blocks_released != max_primary_blocks) {
+			std::abort();
+		}
 
 		return 0;
 	}

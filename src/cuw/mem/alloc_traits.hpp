@@ -333,50 +333,57 @@ namespace cuw::mem {
 		inline constexpr bool check_alloc_cache_v = check_alloc_cache_t<traits_t>::check;
 
 
-		// TODO : rework
 		template<class traits_t, class = void>
-		struct alloc_pool_specs_t {
-			static constexpr pool_chunk_size_t alloc_pool_first_chunk = default_pool_first_chunk;
-			static constexpr pool_chunk_size_t alloc_pool_last_chunk = default_pool_last_chunk;
+		struct alloc_min_chunk_size_log2_t {
+			static constexpr attrs_t value = default_min_chunk_size_log2;
 		};
 
 		template<class traits_t>
-		struct alloc_pool_specs_t<traits_t,
-			std::void_t<
-				enable_option_t<pool_chunk_size_t, decltype(traits_t::alloc_pool_first_chunk)>,
-				enable_option_t<pool_chunk_size_t, decltype(traits_t::alloc_pool_last_chunk)>
-			>
-		> {
-			static constexpr pool_chunk_size_t alloc_pool_first_chunk = traits_t::alloc_pool_first_chunk;
-			static constexpr pool_chunk_size_t alloc_pool_last_chunk = traits_t::alloc_pool_last_chunk;
-			static_assert((attrs_t)alloc_pool_first_chunk <= (attrs_t)alloc_pool_last_chunk);
-		};
-
-		// TODO : rework
-		template<class traits_t, class = void>
-		struct alloc_raw_bins_specs_t {
-		private:
-			static constexpr pool_chunk_size_t _alloc_pool_last_chunk = alloc_pool_specs_t<traits_t>::alloc_pool_last_chunk;
+		struct alloc_min_chunk_size_log2_t<traits_t,
+			std::void_t<enable_option_t<attrs_t, decltype(traits_t::alloc_min_chunk_size_log2)>>> {
 		public:
-			static constexpr attrs_t alloc_raw_base_size = pool_chunk_size((attrs_t)_alloc_pool_last_chunk);
-			static constexpr attrs_t alloc_total_raw_bins = default_total_raw_bins;
+			static constexpr attrs_t value = traits_t::alloc_min_chunk_size_log2;
 		};
 
 		template<class traits_t>
-		struct alloc_raw_bins_specs_t<traits_t,
-			std::void_t<
-				enable_option_t<attrs_t, decltype(traits_t::alloc_raw_base_size)>,
-				enable_option_t<attrs_t, decltype(traits_t::alloc_total_raw_bins)>
-			>
-		> {
-		private:
-			static constexpr pool_chunk_size_t _alloc_pool_last_chunk = alloc_pool_specs_t<traits_t>::alloc_pool_last_chunk;
-		public:
-			static constexpr attrs_t alloc_raw_base_size = traits_t::alloc_raw_base_size;
-			static constexpr attrs_t alloc_total_raw_bins = traits_t::alloc_total_raw_bins;
-			static_assert(alloc_total_raw_bins != 0);
-			static_assert(alloc_raw_base_size >= pool_chunk_size((attrs_t)_alloc_pool_last_chunk));
+		inline constexpr attrs_t alloc_min_chunk_size_log2_v = alloc_min_chunk_size_log2_t<traits_t>::value; 
+
+
+		template<class traits_t, class = void>
+		struct alloc_max_chunk_size_log2_t {
+			static constexpr attrs_t value = default_max_chunk_size_log2;
 		};
+
+		template<class traits_t>
+		struct alloc_max_chunk_size_log2_t<traits_t,
+			std::void_t<enable_option_t<attrs_t, decltype(traits_t::alloc_max_chunk_size_log2)>>> {
+		private:
+			static constexpr attrs_t _alloc_min_chunk_size_log2 = alloc_min_chunk_size_log2_v<traits_t>;
+		public:
+			static constexpr attrs_t value = traits_t::alloc_max_chunk_size_log2;
+			static_assert(value >= _alloc_min_chunk_size_log2);
+			static_assert(value <= max_possible_chunk_size_log2);
+		};
+
+		template<class traits_t>
+		inline constexpr attrs_t alloc_max_chunk_size_log2_v = alloc_max_chunk_size_log2_t<traits_t>::value; 
+
+
+		template<class traits_t, class = void>
+		struct alloc_raw_bin_count_t {
+			static constexpr attrs_t value = default_raw_bin_count;
+		};
+
+		template<class traits_t>
+		struct alloc_raw_bin_count_t<traits_t,
+			std::void_t<enable_option_t<attrs_t, decltype(traits_t::alloc_raw_bin_count)>>> {
+		public:
+			static constexpr attrs_t value = traits_t::alloc_raw_bin_count;
+			static_assert(value > 0);
+		};
+
+		template<class traits_t>
+		inline constexpr attrs_t alloc_raw_bin_count_v = alloc_raw_bin_count_t<traits_t>::value;
 	}
 
 	struct empty_traits_t {};
@@ -415,11 +422,10 @@ namespace cuw::mem {
 		static constexpr bool use_alloc_cache = impl::use_alloc_cache_v<traits_t>;
 		static constexpr bool use_locking = impl::use_locking_v<traits_t>;
 
-		static constexpr pool_chunk_size_t alloc_pool_first_chunk = impl::alloc_pool_specs_t<traits_t>::alloc_pool_first_chunk; // TODO
-		static constexpr pool_chunk_size_t alloc_pool_last_chunk = impl::alloc_pool_specs_t<traits_t>::alloc_pool_last_chunk; // TODO
+		static constexpr attrs_t alloc_min_chunk_size_log2 = impl::alloc_min_chunk_size_log2_v<traits_t>;
+		static constexpr attrs_t alloc_max_chunk_size_log2 = impl::alloc_max_chunk_size_log2_v<traits_t>;
 
-		static constexpr std::size_t alloc_raw_base_size = impl::alloc_raw_bins_specs_t<traits_t>::alloc_raw_base_size; // TODO
-		static constexpr std::size_t alloc_total_raw_bins = impl::alloc_raw_bins_specs_t<traits_t>::alloc_total_raw_bins; // TODO
+		static constexpr attrs_t alloc_raw_bin_count = impl::alloc_raw_bin_count_v<traits_t>;
 
 		static_assert(impl::check_alloc_cache_v<traits_t>);
 	};

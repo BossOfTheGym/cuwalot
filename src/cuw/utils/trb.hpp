@@ -211,7 +211,9 @@ namespace cuw::trb {
 					restore = root;
 				}
 			}
-		} if (!restore) {
+		}
+		
+		if (!restore) {
 			return root; // I guess, it must be nullptr
 		}
 
@@ -288,13 +290,15 @@ namespace cuw::trb {
 			restore_parent = node->parent;
 			if (node->parent) {
 				restore_parent_left = node->parent->left == node;
-			} root = bst::transplant(root, node, node->right);
+			}
+			root = bst::transplant(root, node, node->right);
 		} else if (!node->right) {
 			restore = node->left;
 			restore_parent = node->parent;
 			if (node->parent) {
 				restore_parent_left = node->parent->left == node;
-			} root = bst::transplant(root, node, node->left);
+			}
+			root = bst::transplant(root, node, node->left);
 		} else {
 			node_t* leftmost = bst::tree_min(node->right);
 			removed_color = get_color(leftmost);
@@ -317,7 +321,9 @@ namespace cuw::trb {
 
 		if (removed_color == node_color_t::Black) {
 			root = fix_remove(root, restore_parent, restore, restore_parent_left);
-		} return root;
+		}
+		
+		return root;
 	}
 
 	namespace impl {

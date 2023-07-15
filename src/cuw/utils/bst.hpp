@@ -11,7 +11,8 @@ namespace cuw::bst {
 		assert(root);
 		while (root->left) {
 			root = root->left;
-		} return root;
+		}
+		return root;
 	}
 
 	template<class node_t>
@@ -19,7 +20,8 @@ namespace cuw::bst {
 		assert(root);
 		while (root->right) {
 			root = root->right;
-		} return root;
+		}
+		return root;
 	}
 
 	template<class node_t>
@@ -34,7 +36,8 @@ namespace cuw::bst {
 		while (pred && node == pred->left) {
 			node = pred;
 			pred = pred->parent;
-		} return pred;
+		}
+		return pred;
 	}
 
 	template<class node_t>
@@ -49,7 +52,8 @@ namespace cuw::bst {
 		while (succ && node == succ->right) {
 			node = succ;
 			succ = succ->parent;
-		} return succ;
+		}
+		return succ;
 	}
 
 	template<class node_t, class key_t, class key_ops_t>
@@ -63,7 +67,8 @@ namespace cuw::bst {
 				lb = curr;
 				curr = curr->left;
 			}
-		} return lb;
+		}
+		return lb;
 	}
 
 	// searches in reversed order
@@ -78,7 +83,8 @@ namespace cuw::bst {
 				lb = curr;
 				curr = curr->right;
 			}
-		} return lb;
+		}
+		return lb;
 	}
 
 	// searches in reversed order
@@ -93,7 +99,8 @@ namespace cuw::bst {
 				ub = curr;
 				curr = curr->right;
 			}
-		} return ub;
+		}
+		return ub;
 	}
 
 	template<class node_t>
@@ -173,7 +180,8 @@ namespace cuw::bst {
 				lb = curr;
 				curr = curr->left;
 			}
-		} return {lb, prev};
+		}
+		return {lb, prev};
 	}
 
 	// result can be used to insert node only, check if key exists in tree is impossible
@@ -188,7 +196,8 @@ namespace cuw::bst {
 			} else {
 				curr = curr->left;
 			}
-		} return prev;
+		}
+		return prev;
 	}
 
 	template<class node_t>
@@ -201,9 +210,13 @@ namespace cuw::bst {
 			}
 		} else {
 			root = trans;
-		} if (trans) {
+		}
+
+		if (trans) {
 			trans->parent = (node_t*)node->parent; // assign possibly tagged pointer, explicitly cast it to node_t*
-		} return root;
+		}
+
+		return root;
 	}
 
 	// we already copied state from old_node to the new_node
@@ -219,11 +232,17 @@ namespace cuw::bst {
 			}
 		} else {
 			root = new_node;
-		} if (new_node->left) {
+		}
+		
+		if (new_node->left) {
 			new_node->left->parent = new_node;
-		} if (new_node->right) {
+		}
+		
+		if (new_node->right) {
 			new_node->right->parent = new_node;
-		} return root;
+		}
+		
+		return root;
 	}
 
 	template<class node_t, class func_t>
@@ -282,7 +301,9 @@ namespace cuw::bst {
 			} else {
 				head = node;
 				tail = node;
-			} node->left = nullptr;
+			}
+			
+			node->left = nullptr;
 		}
 
 		template<class func_t>
@@ -308,7 +329,9 @@ namespace cuw::bst {
 			head_tail.append(flatten(left));
 			head_tail.append(root);
 			head_tail.append(flatten(right));
-		} return head_tail;
+		}
+		
+		return head_tail;
 	}
 
 	template<class __node_t>

@@ -74,6 +74,7 @@ namespace cuw::mem {
 			};
 		}
 
+		// required for relocation of descr
 		void set_state(const alloc_descr_state_t& state) {
 			offset = state.offset;
 			size = state.size;
@@ -111,12 +112,12 @@ namespace cuw::mem {
 			return data;
 		}
 
-		// only valid for raw allocation (well, also for pool)
+		// only valid for raw allocation
 		attrs_t get_alignment() const {
-			return pool_chunk_size(chunk_size);
+			return value_to_pow2(chunk_size);
 		}
 
-		// only valid for raw allocation (well, also for pool)
+		// only valid for raw allocation
 		attrs_t get_true_size() const {
 			return align_value(size, get_alignment());
 		}
@@ -151,7 +152,7 @@ namespace cuw::mem {
 		attrs_t offset:16, size:48;
 		attrs_t type:3, chunk_size:5, capacity:14, used:14, count:14, head:14;
 		void* data;
-	};
+	}; 
 
 	static_assert(do_fits_block<alloc_descr_t>);
 
@@ -244,18 +245,22 @@ namespace cuw::mem {
 		using base_t = basic_alloc_descr_cache_t;
 
 		void insert(ad_t* descr) {
+			assert(descr);
 			base_t::insert(&descr->list_entry);
 		}
 
 		void insert_back(ad_t* descr) {
+			assert(descr);
 			base_t::insert_back(&descr->list_entry);
 		}
 
 		void reinsert(ad_t* descr) {
+			assert(descr);
 			base_t::reinsert(&descr->list_entry);
 		}
 
 		void erase(ad_t* descr) {
+			assert(descr);
 			base_t::erase(&descr->list_entry);
 		}
 
@@ -280,17 +285,8 @@ namespace cuw::mem {
 				if (ad_t* ad = ad_t::list_entry_to_descr(*curr); ad->has_addr(addr)) {
 					return ad;
 				}
-			} return nullptr;
-		}
-
-		void adopt(alloc_descr_cache_t& another, int first_part) {
-			base_t part1, part2, part3, part4;
-			base_t::split(first_part, part1, part2);
-			another.split(first_part, part3, part4);
-			part1.adopt(part3);
-			part1.adopt(part2);
-			part1.adopt(part4);
-			static_cast<base_t&>(*this) = std::move(part1);
+			}
+			return nullptr;
 		}
 
 		// void func(ad_t* descr)
@@ -317,7 +313,8 @@ namespace cuw::mem {
 			if (this != &another) {
 				index = std::exchange(another.index, nullptr);
 				count = std::exchange(another.count, 0);
-			} return *this;
+			}
+			return *this;
 		}
 
 		void insert(ad_t* descr) {
@@ -335,24 +332,13 @@ namespace cuw::mem {
 			if (addr_index_t* found = bst::lower_bound(index, addr, ad_t::addr_ops_t{})) {
 				ad_t* descr = ad_t::addr_index_to_descr(found);
 				return descr->has_addr(addr) ? descr : nullptr;
-			} return nullptr;
+			}
+			return nullptr;
 		}
 
 		void reset() {
 			index = nullptr;
 			count = 0;
-		}
-
-		void adopt(alloc_descr_addr_cache_t& another) {
-			if (count < another.count) {
-				std::swap(count, another.count);
-				std::swap(index, another.index);
-			}
-			bst::traverse_inorder(another.index, [&] (addr_index_t* addr) {
-				index = trb::insert_lb(index, addr, ad_t::addr_ops_t{});
-			});
-			count += another.count;
-			another.reset();
 		}
 
 		std::size_t get_size() const {
@@ -363,124 +349,65 @@ namespace cuw::mem {
 		std::size_t count{};
 	};
 
-	struct next_pool_params_t {
-		attrs_t size{};
-		attrs_t capacity{};
-	};
-
-	class pool_entry_ops_t {
-	public:
-		pool_entry_ops_t(attrs_t _chunk_enum = chunk_size_empty) : chunk_enum{_chunk_enum} {}
-
-		// TODO : it can return size that will not be page aligned, design flaw???
-		// TODO : remove it
-		// constraint resolution order (each constraint can violate previous constraints)
-		// 1. pools power
-		// 2. pool capacity
-		next_pool_params_t get_next_pool_params(attrs_t pools, attrs_t min_pools, attrs_t max_pools) const {
-			pools = std::clamp(pools, min_pools, max_pools);
-			attrs_t size = (attrs_t)1 << pools;
-			attrs_t capacity = std::clamp(size >> chunk_enum, min_pool_chunks, max_pool_chunks);
-			return {capacity << chunk_enum, capacity};
-		}
-
-		attrs_t get_chunk_size() const {
-			return pool_chunk_size(chunk_enum);
-		}
-
-		attrs_t get_chunk_size_enum() const {
-			return chunk_enum;
-		}
-
-		attrs_t get_max_alignment() const {
-			return pool_alignment<attrs_t>(chunk_enum);
-		}
-
-	private:
-		attrs_t chunk_enum{};
-	};
-
-
 	// chunk_size: size of allocated chunk, real value not enum
 	// type: block_type_t value, must be pool-like
-	// free_cache: list of description blocks (pools) that have free chunks
-	// full_cache: list of description blocks (pools) that have no free chunks
-	class alloc_descr_pool_cache_t : public pool_entry_ops_t {
+	// free_cache: list of description blocks (pool_count) that have free chunks
+	// full_cache: list of description blocks (pool_count) that have no free chunks
+	class alloc_descr_pool_cache_t {
 	public:
-		using base_t = pool_entry_ops_t;
 		using ad_t = alloc_descr_t;
 		using ad_cache_t = alloc_descr_cache_t;
 
-		alloc_descr_pool_cache_t(attrs_t chunk_enum, attrs_t _type) : base_t(chunk_enum), type{_type} {}
+		alloc_descr_pool_cache_t() = default;
+		~alloc_descr_pool_cache_t() = default;
 
 		alloc_descr_pool_cache_t(const alloc_descr_pool_cache_t&) = delete;
-		alloc_descr_pool_cache_t(alloc_descr_pool_cache_t&& another) noexcept {
-			*this = std::move(another);
-		}
-
 		alloc_descr_pool_cache_t& operator = (const alloc_descr_pool_cache_t&) = delete;
-		alloc_descr_pool_cache_t& operator = (alloc_descr_pool_cache_t&& another) noexcept {
-			(base_t&)*this = std::move(another);
-			free_pools = std::move(another.free_pools);
-			full_pools = std::move(another.full_pools);
-			std::swap(type, another.type);
-			std::swap(pools, another.pools);
-			return *this;
-		}
 
-	private:
-		void check_descr(ad_t* descr) const {
-			assert(descr);
-			assert(descr->chunk_size == base_t::get_chunk_size_enum());
-			assert(descr->type == get_type());
-		}
+		alloc_descr_pool_cache_t(alloc_descr_pool_cache_t&&) noexcept = default;
+		alloc_descr_pool_cache_t& operator = (alloc_descr_pool_cache_t&&) noexcept = default;
 
 	public:
 		void insert_free(ad_t* descr) {
-			check_descr(descr);
 			free_pools.insert(descr);
-			++pools;
+			++pool_count;
 		}
 
 		void reinsert_free(ad_t* descr) {
-			check_descr(descr);
 			free_pools.reinsert(descr);
 		}
 
 		void insert_full(ad_t* descr) {
-			check_descr(descr);
 			full_pools.insert(descr);
-			++pools;
+			++pool_count;
 		}
 
 		void reinsert_full(ad_t* descr) {
-			check_descr(descr);
 			full_pools.reinsert(descr);
 		}
 
 
 		void insert(ad_t* descr) {
-			check_descr(descr);
-			++pools;
+			++pool_count;
 			alloc_descr_wrapper_t pool{descr};
 			if (pool.full()) {
 				full_pools.insert(descr);
-			} free_pools.insert(descr);
-		}		
+			}
+			free_pools.insert(descr);
+		}
 
 		void insert_back(ad_t* descr) {
-			check_descr(descr);
-			++pools;
+			++pool_count;
 			alloc_descr_wrapper_t pool{descr};
 			if (pool.full()) {
 				full_pools.insert_back(descr);
-			} free_pools.insert_back(descr);
+			}
+			free_pools.insert_back(descr);
 		}
 
 		void erase(ad_t* descr) {
-			check_descr(descr);
 			list::erase(&descr->list_entry);
-			--pools;
+			--pool_count;
 		}
 
 		ad_t* peek() const {
@@ -490,17 +417,8 @@ namespace cuw::mem {
 		ad_t* find(void* addr, int max_lookups) {
 			if (ad_t* descr = free_pools.find(addr, max_lookups)) {
 				return descr;
-			} return full_pools.find(addr, max_lookups);
-		}
-
-		void adopt(alloc_descr_pool_cache_t& another, int first_part) {
-			assert(base_t::get_chunk_size_enum() == another.get_chunk_size_enum());
-			assert(get_type() == another.get_type());
-
-			free_pools.adopt(another.free_pools, first_part);
-			full_pools.adopt(another.full_pools, first_part);
-			pools += another.pools;
-			another.pools = 0;
+			}
+			return full_pools.find(addr, max_lookups);
 		}
 
 		// void func(ad_t* descr)
@@ -516,7 +434,7 @@ namespace cuw::mem {
 			int released = 0;
 			released += free_pools.release_all(func);
 			released += full_pools.release_all(func);
-			pools -= released;
+			pool_count -= released;
 			return released;
 		}
 
@@ -525,73 +443,16 @@ namespace cuw::mem {
 			full_pools.reset();
 		}
 
-		next_pool_params_t get_next_pool_params(attrs_t min_pools, attrs_t max_pools) const {
-			return base_t::get_next_pool_params(pools, min_pools, max_pools);
-		}
-
-		attrs_t get_type() const {
-			return type;
+		attrs_t get_pool_count() const {
+			return pool_count;
 		}
 
 	private:
 		ad_cache_t free_pools{};
 		ad_cache_t full_pools{};
-		attrs_t type{};
-		attrs_t pools{};
+		attrs_t pool_count{};
 	};
 
 
-	class alloc_descr_raw_cache_t : public alloc_descr_cache_t {
-	public:
-		using ad_t = alloc_descr_t;
-		using ad_cache_t = alloc_descr_cache_t;
-		using base_t = alloc_descr_cache_t;
-
-	private:
-		void check_descr(ad_t* descr) const {
-			assert(descr);
-			assert(descr->get_type() == (attrs_t)block_type_t::Raw);
-		}
-
-	public:
-		void insert(ad_t* descr) {
-			check_descr(descr);
-			base_t::insert(descr);
-		}
-
-		void insert_back(ad_t* descr) {
-			check_descr(descr);
-			base_t::insert_back(descr);
-		}
-
-		void reinsert(ad_t* descr) {
-			check_descr(descr);
-			base_t::reinsert(descr);
-		}
-
-		void erase(ad_t* descr) {
-			check_descr(descr);
-			base_t::erase(descr);
-		}
-
-		void adopt(alloc_descr_raw_cache_t& another, int first_part) {
-			base_t::adopt(another, first_part);
-		}
-
-		// void func(ad_t* descr)
-		template<class func_t>
-		void traverse(func_t func) {
-			return base_t::traverse(func);
-		}
-
-		// bool func(ad_t* descr)
-		template<class func_t>
-		int release_all(func_t func) {
-			return base_t::release_all(func);
-		}
-
-		void reset() {
-			base_t::reset();
-		}
-	};
+	using alloc_descr_raw_cache_t = alloc_descr_cache_t;
 }

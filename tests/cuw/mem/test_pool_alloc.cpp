@@ -22,15 +22,16 @@ namespace {
 		static constexpr std::size_t alloc_raw_cache_lookups = 4;
 		static constexpr std::size_t alloc_basic_alignment = 16;
 		static constexpr bool use_alloc_cache = false;
-		static constexpr auto alloc_pool_first_chunk = mem::pool_chunk_size_t::Bytes2;
-		static constexpr auto alloc_pool_last_chunk = mem::pool_chunk_size_t::Bytes128;
+
+		static constexpr attrs_t alloc_min_chunk_size_log2 = 1;
+		static constexpr attrs_t alloc_min_chunk_size_log2 = 7;
 	};
 
 	template<class alloc_t, class = void>
 	struct is_page_alloc_t : std::false_type {};
 
 	template<class alloc_t>
-	struct is_page_alloc_t<alloc_t, std::void_t<decltype(&alloc_t::get_size_index), decltype(&alloc_t::get_addr_index)>> : std::false_type {};
+	struct is_page_alloc_t<alloc_t, std::void_t<decltype(&alloc_t::get_size_index), decltype(&alloc_t::get_addr_index)>> : std::true_type {};
 
 	template<class alloc_t>
 	inline constexpr bool is_page_alloc_v = is_page_alloc_t<alloc_t>::value;
@@ -273,7 +274,8 @@ namespace {
 			if constexpr(is_page_alloc_v<pool_alloc_t>) {
 				std::cout << "- addr_index" << std::endl << addr_index_info_t{alloc};
 				std::cout << "- size_index" << std::endl << size_index_info_t{alloc};
-			} std::cout << "- alloc ranges" << std::endl << ranges_info_t{alloc};
+			}
+			std::cout << "- alloc ranges" << std::endl << ranges_info_t{alloc};
 		};
 
 		auto allocate = [&] () {
@@ -285,7 +287,8 @@ namespace {
 				std::cout << "successully allocated memory " << allocations.back() << std::endl;
 			} else {
 				std::cout << "failed to allocate memory" << std::endl;
-			} print_status();
+			}
+			print_status();
 		};
 
 		auto deallocate = [&] () {
@@ -317,7 +320,8 @@ namespace {
 					std::cout << "successfully reallocated memory to " << allocation << std::endl;
 				} else {
 					std::cout << "failed to reallocate memory" << std::endl;
-				} print_status();
+				}
+				print_status();
 			} else {
 				std::cout << "no allocations" << std::endl;
 			}
@@ -330,14 +334,19 @@ namespace {
 				case 0: {
 					allocate();
 					break;
-				} case 1: {
+				}
+				
+				case 1: {
 					deallocate();
 					break;
-				} case 2: {
+				}
+				
+				case 2: {
 					reallocate();
 					break;
 				}
-			} std::cout << std::endl;
+			}
+			std::cout << std::endl;
 		}
 
 		for (auto& [ptr, size, align] : allocations) {
@@ -355,15 +364,18 @@ namespace {
 int main() {
 	if (test_pool_alloc()) {
 		return -1;
-	} std::cout << std::endl;
+	}
+	std::cout << std::endl;
 	
 	if (test_pool_growth()) {
 		return -1;
-	} std::cout << std::endl;
+	}
+	std::cout << std::endl;
 	
 	if (test_pool_alloc_random()) {
 		return -1;
-	} std::cout << std::endl;
+	}
+	std::cout << std::endl;
 
 	return 0;
 }

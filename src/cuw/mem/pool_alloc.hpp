@@ -41,38 +41,28 @@ namespace cuw::mem {
 			}
 		};
 
-		// TODO : fuck this
-		template<class pool_type_t, auto first_chunk, auto last_chunk>
+		template<attrs_t min_chunk_size_log2, attrs_t max_chunk_size_log2>
 		class pools_t {
 		public:
-			static_assert(std::is_same_v<decltype(first_chunk), decltype(last_chunk)>);
-			static_assert((attrs_t)first_chunk <= (attrs_t)last_chunk);
-
-			static constexpr attrs_t total_pools = (attrs_t)last_chunk - (attrs_t)first_chunk + 1;
-
-			using enum_t = decltype(first_chunk);
 			using ad_addr_cache_t = alloc_descr_addr_cache_t;
 
-		private:
-			static enum_t index_to_enum(attrs_t index) {
-				return enum_t{(std::size_t)first_chunk + index};
-			}
+			static constexpr attrs_t max_pools = max_chunk_size_log2 - min_chunk_size_log2 + 1;
 
 		public:
 			pools_t(attrs_t max_alignment) {
-				for (int i = 0; i < total_pools; i++) {
-					auto enum_value = index_to_enum(i);
-					auto alignment = std::min(pool_chunk_size((attrs_t)enum_value), max_alignment);
-					pools[i] = pool_type_t(enum_value, alignment);
+				for (int i = 0; i < max_pools; i++) {
+					attrs_t chunk_size_log2 = min_chunk_size_log2 + i;
+					attrs_t alignment = std::min(value_to_pow2(chunk_size_log2), max_alignment);
+					pools[i] = pool_entry_t{chunk_size_log2, alignment};
 				}
 			}
 
 			std::size_t get_count() const {
-				return total_pools;
+				return max_pools;
 			}
 
-			pool_type_t& get(int i) {
-				assert(i >= 0 && i < total_pools);
+			pool_entry_t& get(int i) {
+				assert(i >= 0 && i < max_pools);
 				return pools[i];
 			}
 
@@ -99,35 +89,28 @@ namespace cuw::mem {
 				}
 			}
 
-			void adopt(pools_t& another, int merge_param) {
-				for (int i = 0; i < total_pools; i++) {
-					pools[i].adopt(another.pools[i], merge_param);
-				}
-			}
-
 		private:
-			pool_type_t pools[total_pools] = {};
+			pool_entry_t pools[max_pools];
 		};
 
-		// TODO : fuck this
-		template<class bin_type_t, attrs_t total_bins>
+		template<std::size_t max_bins>
 		class raw_bins_t {
 		public:
 			using ad_t = alloc_descr_t;
 			using ad_addr_cache_t = alloc_descr_addr_cache_t;
 
 			raw_bins_t(std::size_t base_size) {
-				for (attrs_t i = 1; i < total_bins; i++) {
-					size_limits[i - 1] = base_size << i;
+				for (attrs_t i = 0; i <= max_bins; i++) {
+					size_limits[i] = base_size << (i + 1);
 				}
 			}
 
 			std::size_t get_count() const {
-				return total_bins;
+				return max_bins;
 			}
 
-			bin_type_t& get(int i) {
-				assert(i >= 0 && i < total_bins);
+			raw_entry_t& get(int i) {
+				assert(i >= 0 && i <= max_bins);
 				return bins[i];
 			}
 
@@ -136,17 +119,18 @@ namespace cuw::mem {
 			}
 
 			auto end() {
-				return begin() + total_bins - 1; // last bin serves the rest of the allocations
+				return begin() + max_bins + 1;
 			}
 
 			// bin stores allocations that are less than thresh value
 			// always returns valid iter
 			auto find(attrs_t size) {
 				auto it1 = std::begin(size_limits);
-				auto it2 = std::begin(size_limits) + total_bins - 1;
+				auto it2 = std::begin(size_limits) + max_bins; // except the last one
 				auto it = std::lower_bound(it1, it2, size, [&] (auto& size_limit, auto& value) {
 					return size_limit <= value;
 				});
+				
 				return std::begin(bins) + (it - it1);
 			}
 
@@ -158,15 +142,9 @@ namespace cuw::mem {
 				}
 			}
 
-			void adopt(raw_bins_t& another, int merge_param) {
-				for (int i = 0; i < total_bins; i++) {
-					bins[i].adopt(another.bins[i], merge_param);
-				}
-			}
-
 		private:
-			bin_type_t bins[total_bins];
-			attrs_t size_limits[total_bins];
+			raw_entry_t bins[max_bins + 1];
+			attrs_t size_limits[max_bins + 1];
 		};
 	}
 
@@ -193,90 +171,32 @@ namespace cuw::mem {
 		using pool_t = pool_entry_t;
 		using raw_bin_t = raw_entry_t;
 
-		using pools_t = impl::pools_t<pool_t, base_t::alloc_pool_first_chunk, base_t::alloc_pool_last_chunk>;
-		using raw_bins_t = impl::raw_bins_t<raw_bin_t, base_t::alloc_total_raw_bins>;
+		using pools_t = impl::pools_t<base_t::alloc_min_chunk_size_log2, base_t::alloc_max_chunk_size_log2>;
+		using raw_bins_t = impl::raw_bins_t<base_t::alloc_raw_bin_count>;
+
+		std::size_t get_max_pool_chunk_size() {
+			return value_to_pow2(base_t::alloc_max_chunk_size_log2);
+		}
 
 	public:
 		template<class ... args_t>
 		pool_alloc_t(args_t&& ... args)
-			: base_t(std::forward<args_t>(args)...)
-			, pools(base_t::get_page_size())
-			, raw_bins(base_t::get_page_size()) {
-			min_pool_alignment = std::min(base_t::get_page_size(), pool_chunk_size((std::size_t)base_t::alloc_pool_first_chunk));
-			max_pool_alignment = std::min(base_t::get_page_size(), pool_chunk_size((std::size_t)base_t::alloc_pool_last_chunk));
+			: base_t{std::forward<args_t>(args)...}
+			, pools{base_t::get_page_size()}
+			, raw_bins{get_max_pool_chunk_size()} {
+			min_pool_alignment = std::min<std::size_t>(base_t::get_page_size(), value_to_pow2(base_t::alloc_min_chunk_size_log2));
+			max_pool_alignment = std::min<std::size_t>(base_t::get_page_size(), value_to_pow2(base_t::alloc_max_chunk_size_log2));
 		}
-
-		pool_alloc_t(const pool_alloc_t&) = delete;
-		pool_alloc_t(pool_alloc_t&&) = delete;
 
 		~pool_alloc_t() {
 			release_mem();
 		}
 
+		pool_alloc_t(const pool_alloc_t&) = delete;
+		pool_alloc_t(pool_alloc_t&&) = delete;
+
 		pool_alloc_t& operator = (const pool_alloc_t&) = delete;
 		pool_alloc_t& operator = (pool_alloc_t&&) = delete; 
-
-	private:
-		void adopt_pools_n_bins(pool_alloc_t& another) {
-			ad_entry.adopt(another.ad_entry);
-			
-			pools_t tmp_pools(base_t::get_page_size());
-			for (int i = 0; i < tmp_pools.get_count(); i++) {
-				auto& tmp_pool = tmp_pools.get(i);
-				auto& pool = another.pools.get(i);
-				pool.traverse([&] (ad_t* ad) {
-					ad_t* new_descr = realloc_descr(ad);
-					tmp_pool.insert_back(new_descr);
-					addr_cache.insert(new_descr);
-				});
-			}
-			another.pools.reset();
-			pools.adopt(tmp_pools, base_t::alloc_pool_cache_lookups / 2);
-
-			raw_bins_t tmp_raw_bins(base_t::get_page_size());
-			for (int i = 0; i < tmp_raw_bins.get_count(); i++) {
-				auto& tmp_raw_bin = tmp_raw_bins.get(i);
-				auto& bin = another.raw_bins.get(i);
-				bin.traverse([&] (ad_t* ad) {
-					ad_t* new_descr = realloc_descr(ad);
-					tmp_raw_bin.insert_back(new_descr);
-					addr_cache.insert(new_descr);
-				});
-			}
-			another.raw_bins.reset();
-			raw_bins.adopt(tmp_raw_bins, base_t::alloc_raw_cache_lookups / 2);
-
-			another.addr_cache.reset();
-		}
-
-	public:
-		void adopt(pool_alloc_t& another) {
-			if (this == &another) {
-				return;
-			}
-
-			std::size_t this_descr_count = ad_entry.get_count();
-			std::size_t another_descr_count = another.ad_entry.get_count();
-			std::size_t total_count = this_descr_count + another_descr_count;
-			std::size_t total_capacity = ad_entry.get_total_capacity() + another.ad_entry.get_total_capacity();
-			if (total_capacity / total_count >= 2) {
-				if (this_descr_count > another_descr_count) {
-					adopt_pools_n_bins(another);
-				} else {
-					another.adopt_pools_n_bins(*this);
-					addr_cache = another.addr_cache;
-					another.addr_cache.reset();
-					ad_entry = std::move(another.ad_entry);
-					pools = std::move(another.pools);
-					raw_bins= std::move(another.raw_bins);
-				}
-			} else {
-				ad_entry.adopt(another.ad_entry);
-				addr_cache.adopt(another.addr_cache);
-				pools.adopt(another.pools, base_t::alloc_pool_cache_lookups / 2);
-				raw_bins.adopt(another.raw_bins, base_t::alloc_raw_cache_lookups / 2);
-			}
-		}
 
 	public: // for debug
 		void release_mem() {
@@ -284,40 +204,45 @@ namespace cuw::mem {
 				base_t::deallocate(data, size); // we can leak descrs here as all blocks will be freed anyways
 				return true;			
 			};
+
 			pools.release_all(release_func);
 			raw_bins.release_all(release_func);
 			ad_entry.release_all([&] (void* data, std::size_t size) {
 				base_t::deallocate(data, size);
 				return true;
 			});
+
 			addr_cache.reset();
 		}
 
 	private:
 		// returns non-zero on success, returns 0 on failure
-		std::size_t adjust_raw_alignment(std::size_t value) {
+		std::size_t adjust_alignment(std::size_t vlaue, std::size_t max_alignment) {
 			if (value == 0) {
 				value = base_t::alloc_basic_alignment;
-			} if (!is_alignment(value)) {
+			}
+			
+			if (!is_alignment(value)) {
 				return 0;
-			} if (value <= base_t::get_page_size()) {
+			}
+			
+			if (value <= max_alignment) {
 				return value;
-			} return 0;
+			}
+			
+			return 0;
 		}
 
-		// returns non-zero on success, returns 0 on failure
+		std::size_t adjust_raw_alignment(std::size_t value) {
+			return adjust_alignment(value, base_t::get_page_size());
+		}
+
 		std::size_t adjust_pool_alignment(std::size_t value) {
-			if (value == 0) {
-				value = base_t::alloc_basic_alignment;
-			} if (!is_alignment(value)) {
-				return 0;
-			} if (value <= max_pool_alignment) {
-				return value;
-			} return 0;
+			return adjust_alignment(value, max_pool_alignment);
 		}
 
 		std::size_t fetch_pool_alignment(ad_t* descr) {
-			return std::min<std::size_t>(pool_alignment(descr->chunk_size), max_pool_alignment);
+			return std::min<std::size_t>(value_to_pow2(descr->chunk_size), max_pool_alignment);
 		}
 
 	private:
@@ -331,7 +256,9 @@ namespace cuw::mem {
 			if (void* pool_mem = base_t::allocate(pool_size)) {
 				ad_entry.create_pool(pool_mem, pool_size);
 				return ad_entry.acquire();
-			} return {nullptr, block_pool_head_empty};
+			}
+			
+			return {nullptr, block_pool_head_empty};
 		}
 
 		// index & cache data is invalidated
@@ -368,8 +295,11 @@ namespace cuw::mem {
 				return nullptr;
 			}
 
-			// TODO : calculate it here, remove get_next_pool_params
-			auto [pool_size, pool_capacity] = pool.get_next_pool_params(base_t::alloc_min_pool_power, base_t::alloc_max_pool_power);
+			attrs_t chunk_size_log2 = pool.get_chunk_size_log2();
+			attrs_t power = std::clamp(pool.get_pool_count(), base_t::alloc_min_pool_power, base_t::alloc_max_pool_power);
+			attrs_t pool_size = value_to_pow2(power);
+			attrs_t pool_capacity = std::clamp(pool_size >> chunk_size_log2, min_pool_chunks, max_pool_chunks);
+			pool_size = align_value<attrs_t>(pool_capacity << chunk_size_log2, base_t::get_page_size());
 
 			void* pool_data = base_t::allocate(pool_size);
 			if (!pool_data) {
@@ -380,7 +310,9 @@ namespace cuw::mem {
 			ad_t* pool_ad = pool.create(ad, offset, pool_size, pool_capacity, pool_data);
 			if (pool_ad) {
 				addr_cache.insert(pool_ad);
-			} return pool_ad;
+			}
+
+			return pool_ad;
 		}
 
 		template<class entry_t>
@@ -395,25 +327,33 @@ namespace cuw::mem {
 		[[nodiscard]] void* alloc_pool(pool_t& pool) {
 			if (void* ptr = pool.acquire()) {
 				return ptr;
-			} if (create_pool(pool)) {
+			}
+
+			if (create_pool(pool)) {
 				return pool.acquire();
-			} return nullptr;
+			}
+
+			return nullptr;
 		}
 
 		bool free_pool(pool_t& pool, void* ptr) {
 			if (auto [ad, ptr_released] = pool.release(addr_cache, ptr, base_t::alloc_pool_cache_lookups); ptr_released) {
 				if (ad) {
 					finish_release(pool, ad);
-				} return true;
-			} return false;
+				}
+				return true;
+			}
+			return false;
 		}
 
 		bool free_pool(pool_t& pool, void* ptr, ad_t* ad) {
 			if (auto [ad, ptr_released] = pool.release(ptr, ad); ptr_released) {
 				if (ad) {
 					finish_release(pool, ad);
-				} return true;
-			} return false;
+				}
+				return true;
+			}
+			return false;
 		}
 
 		[[nodiscard]] void* alloc_raw(raw_bin_t& bin, std::size_t size, std::size_t alignment) {
@@ -432,7 +372,9 @@ namespace cuw::mem {
 			ad_t* ad = bin.create(ad_mem, offset, size, alignment, data);
 			if (ad) {
 				addr_cache.insert(ad);
-			} return data;
+			}
+			
+			return data;
 		}
 
 		[[nodiscard]] void* alloc_raw(std::size_t size, std::size_t alignment) {
@@ -443,7 +385,9 @@ namespace cuw::mem {
 			if (ad) {
 				finish_release(bin, bin.release(ad));
 				return true;
-			} return false;
+			}
+			
+			return false;
 		}
 
 		bool free_raw(ad_t* ad) {
@@ -454,7 +398,9 @@ namespace cuw::mem {
 			if (ad_t* ad = bin.release(addr_cache, ptr, base_t::alloc_raw_cache_lookups)) {
 				finish_release(bin, ad);
 				return true;
-			} return false;
+			}
+
+			return false;
 		}
 
 		bool free_raw(void* ptr, std::size_t size) {
@@ -480,10 +426,8 @@ namespace cuw::mem {
 			auto new_bin = raw_bins.find(new_size_aligned);
 
 			ad_t* extracted = extract_raw(*old_bin, old_ptr);
-			if (!extracted) {
+			if (!extracted || alignment != extracted->get_alignment()) {
 				return nullptr; // very bad
-			} if (alignment != extracted->get_alignment()) {
-				return nullptr;
 			}
 
 			void* new_memory = base_t::reallocate(extracted->get_data(), old_size_aligned, new_size_aligned);
@@ -491,6 +435,7 @@ namespace cuw::mem {
 				put_back_raw(*old_bin, extracted);
 				return nullptr;
 			}
+
 			extracted->set_data(new_memory);
 			extracted->set_size(new_size_aligned);
 			put_back_raw(*new_bin, extracted);
@@ -529,24 +474,29 @@ namespace cuw::mem {
 			if (ad_t* ad = addr_cache.find(ptr)) {
 				free42(ad, ptr);
 				return true;
-			} return false;
+			}
+
+			return false;
 		}
 
 		bool free42(ad_t* ad, void* ptr) {
 			assert(ad);
 			assert(ptr);
 
-			using enum block_type_t;
-
 			switch (block_type_t{ad->get_type()}) {
-				case Pool: {
+				case block_type_t::Pool: {
 					attrs_t chunk_size = pool_chunk_size<attrs_t>(ad->get_chunk_size());
 					if (auto pool = pools.find(chunk_size); pool != pools.end()) {
 						return free_pool(*pool, ptr, ad);
-					} return false;
-				} case Raw: {
+					}
+					return false;
+				}
+
+				case block_type_t::Raw: {
 					return free_raw(ad);
-				} default: {
+				}
+
+				default: {
 					return false;
 				}
 			}
@@ -586,18 +536,24 @@ namespace cuw::mem {
 			std::size_t old_size = 0;
 			std::size_t alignment = 0;
 			switch (block_type_t{ad->get_type()}) {
-				case Pool: {
+				case block_type_t::Pool: {
 					old_size = pool_chunk_size(ad->get_chunk_size());
 					alignment = fetch_pool_alignment(ad);
 					break;
-				} case Raw: {
+				}
+				
+				case block_type_t::Raw: {
 					old_size = ad->get_size();
 					alignment = ad->get_alignment();
 					break;
-				} default: {
+				}
+				
+				default: {
 					std::abort();
 				}
-			} return realloc42(old_ptr, old_size, alignment, new_size);
+			}
+			
+			return realloc42(old_ptr, old_size, alignment, new_size);
 		}
 
 		[[nodiscard]] void* realloc42(void* old_ptr, std::size_t old_size, std::size_t alignment, std::size_t new_size) {
@@ -682,45 +638,59 @@ namespace cuw::mem {
 		[[nodiscard]] void* malloc(std::size_t size) {
 			if (size == 0){
 				return zero_alloc();
-			} return alloc42(size);
+			}
+
+			return alloc42(size);
 		}
 
 		[[nodiscard]] void* realloc(void* ptr, std::size_t new_size) {
 			if (!ptr) {
 				return malloc(new_size);
-			} if (new_size == 0) {
+			}
+
+			if (new_size == 0) {
 				free42(ptr);
 				return zero_alloc();
-			} return realloc42(ptr, new_size);
+			}
+
+			return realloc42(ptr, new_size);
 		}
 
 		bool free(void* ptr) {
 			if (!ptr) {
 				return true;
-			} return free42(ptr);
+			}
+			return free42(ptr);
 		}
 
 	public: // extension API
 		[[nodiscard]] void* malloc(std::size_t size, std::size_t alignment, flags_t flags = 0) {
 			if (size == 0) {
 				return zero_alloc();
-			} return alloc42(size, alignment);
+			}
+			return alloc42(size, alignment);
 		}
 
 		// alignment and flags must match alignment and flags of old_ptr
 		[[nodiscard]] void* realloc(void* ptr, std::size_t old_size, std::size_t new_size, std::size_t alignment, flags_t flags = 0) {
 			if (!ptr) {
 				return malloc(new_size, alignment, flags);
-			} if (old_size == 0) {
+			}
+
+			if (old_size == 0) {
 				if (new_size == 0) {
 					return ptr;
 				}
 				free_zero(ptr);
 				return malloc(new_size, alignment, flags);
-			} if (new_size == 0) {
+			}
+			
+			if (new_size == 0) {
 				free42(ptr, old_size, alignment);
 				return zero_alloc();
-			} return realloc42(ptr, old_size, alignment, new_size);
+			}
+			
+			return realloc42(ptr, old_size, alignment, new_size);
 		}
 
 		// alignment and flags must be same as used with malloc()
@@ -728,9 +698,13 @@ namespace cuw::mem {
 		bool free(void* ptr, std::size_t size, std::size_t alignment, flags_t flags = 0) {
 			if (!ptr) {
 				return true;
-			} if (size == 0) {
+			}
+			
+			if (size == 0) {
 				return free_zero(ptr);
-			} return free42(ptr, size, alignment);
+			}
+			
+			return free42(ptr, size, alignment);
 		}	
 
 	private:

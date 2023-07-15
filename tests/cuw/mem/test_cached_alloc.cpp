@@ -19,6 +19,7 @@ namespace {
 		static_assert(std::has_single_bit(alloc_min_slot_size));
 		static_assert(std::has_single_bit(alloc_max_slot_size));
 	};
+
 	using test_traits_t = mem::cached_alloc_traits_t<__test_traits_t>;
 	using test_cached_alloc_t = mem::cached_alloc_t<dummy_allocator_t<test_traits_t>>;
 
@@ -34,7 +35,8 @@ namespace {
 		chunk_t chunks[total_slots];
 		for (auto& chunk : chunks) {
 			chunk = {alloc.allocate(max_slot_size), max_slot_size};
-		} for (auto& chunk : chunks) {
+		}
+		for (auto& chunk : chunks) {
 			alloc.deallocate(chunk.ptr, chunk.size);
 		}
 	}

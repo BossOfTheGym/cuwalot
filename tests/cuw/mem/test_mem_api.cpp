@@ -40,7 +40,8 @@ namespace {
 		if (ptr.status) {
 			std::cerr << "failed to allocate system memory" << std::endl;
 			return 1;
-		} std::cout << "ptr: " << ptr.value << std::endl;
+		}
+		std::cout << "ptr: " << ptr.value << std::endl;
 
 		std::cout << "writing memory..." << std::endl;
 		std::memset(ptr.value, 0xFF, alloc_size);
@@ -51,7 +52,8 @@ namespace {
 				std::cerr << "invalid read" << std::endl;
 				return 1;
 			}
-		} std::cout << "read successful" << std::endl;
+		}
+		std::cout << "read successful" << std::endl;
 
 		std::cout << "deallocating..." << std::endl;
 		if (mem::deallocate_sysmem(ptr.value, alloc_size)) {
@@ -113,9 +115,15 @@ namespace {
 int main(int argc, char* argv[]) {
 	if (int status = test_sysmem_info()) {
 		return status;
-	} if (int status = test_alloc_free()) {
+	}
+	
+	if (int status = test_alloc_free()) {
 		return status;
-	} if (int status = test_memory_allocations()) {
+	}
+	
+	if (int status = test_memory_allocations()) {
 		return status;
-	} return 0;
+	}
+	
+	return 0;
 }
