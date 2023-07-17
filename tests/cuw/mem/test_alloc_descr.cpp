@@ -54,14 +54,6 @@ namespace {
 		std::cout << "cache2:" << std::endl;
 		test_cache(cache2);
 
-		cache1.adopt(cache2);
-
-		std::cout << "cache1:" << std::endl;
-		test_cache(cache1);
-		std::cout << std::endl;
-		std::cout << "cache2:" << std::endl;
-		test_cache(cache2);
-
 		std::cout << "testing finished" << std::endl << std::endl;
 
 		return 0;

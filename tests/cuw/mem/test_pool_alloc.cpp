@@ -23,8 +23,8 @@ namespace {
 		static constexpr std::size_t alloc_basic_alignment = 16;
 		static constexpr bool use_alloc_cache = false;
 
-		static constexpr attrs_t alloc_min_chunk_size_log2 = 1;
-		static constexpr attrs_t alloc_min_chunk_size_log2 = 7;
+		static constexpr mem::attrs_t alloc_min_chunk_size_log2 = 1;
+		static constexpr mem::attrs_t alloc_max_chunk_size_log2 = 7;
 	};
 
 	template<class alloc_t, class = void>
@@ -44,8 +44,8 @@ namespace {
 	using page_alloc_t = dummy_allocator_t<pool_alloc_traits_t>;
 	using pool_alloc_t = mem::pool_alloc_t<page_alloc_t>;
 
-	inline constexpr std::size_t min_pool_chunk_size = mem::pool_chunk_size((std::size_t)pool_alloc_t::alloc_pool_first_chunk);
-	inline constexpr std::size_t max_pool_chunk_size = mem::pool_chunk_size((std::size_t)pool_alloc_t::alloc_pool_last_chunk);
+	inline constexpr std::size_t min_pool_chunk_size = mem::value_to_pow2((std::size_t)pool_alloc_t::alloc_min_chunk_size_log2);
+	inline constexpr std::size_t max_pool_chunk_size = mem::value_to_pow2((std::size_t)pool_alloc_t::alloc_max_chunk_size_log2);
 	inline constexpr std::size_t max_alignment = std::min(max_pool_chunk_size, pool_alloc_t::alloc_page_size);
 	inline constexpr std::size_t max_alignment_power = std::countr_zero(max_alignment);
 

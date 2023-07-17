@@ -217,7 +217,7 @@ namespace cuw::mem {
 
 	private:
 		// returns non-zero on success, returns 0 on failure
-		std::size_t adjust_alignment(std::size_t vlaue, std::size_t max_alignment) {
+		std::size_t adjust_alignment(std::size_t value, std::size_t max_alignment) {
 			if (value == 0) {
 				value = base_t::alloc_basic_alignment;
 			}
@@ -485,7 +485,7 @@ namespace cuw::mem {
 
 			switch (block_type_t{ad->get_type()}) {
 				case block_type_t::Pool: {
-					attrs_t chunk_size = pool_chunk_size<attrs_t>(ad->get_chunk_size());
+					attrs_t chunk_size = value_to_pow2(ad->get_chunk_size());
 					if (auto pool = pools.find(chunk_size); pool != pools.end()) {
 						return free_pool(*pool, ptr, ad);
 					}
@@ -537,7 +537,7 @@ namespace cuw::mem {
 			std::size_t alignment = 0;
 			switch (block_type_t{ad->get_type()}) {
 				case block_type_t::Pool: {
-					old_size = pool_chunk_size(ad->get_chunk_size());
+					old_size = value_to_pow2(ad->get_chunk_size());
 					alignment = fetch_pool_alignment(ad);
 					break;
 				}

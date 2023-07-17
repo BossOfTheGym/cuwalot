@@ -9,7 +9,7 @@ using ad_t = mem::alloc_descr_t;
 
 namespace {
 	template<std::size_t chunk_size_log2, std::size_t total_chunks>
-	int test_entries_impl(std::size_t chunk_size_log2) {
+	int test_entries_impl() {
 		constexpr std::size_t chunk_size = mem::value_to_pow2(chunk_size_log2);
 		constexpr std::size_t chunk_alignment = chunk_size;
 		constexpr std::size_t total_pools = 4;

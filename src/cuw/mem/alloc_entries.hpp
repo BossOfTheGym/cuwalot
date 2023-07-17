@@ -20,7 +20,7 @@ namespace cuw::mem {
 		using ad_t = alloc_descr_t;
 		using ad_addr_cache_t = alloc_descr_addr_cache_t;
 
-		basic_pool_entry_t(attrs_t _chunk_size_log2, attrs_t _alignment)
+		basic_pool_entry_t(attrs_t _chunk_size_log2 = 0, attrs_t _alignment = 0)
 			: chunk_size_log2{_chunk_size_log2}, alignment{_alignment} {}
 
 	private:
@@ -120,6 +120,10 @@ namespace cuw::mem {
 
 		void reset() {
 			base_t::reset();
+		}
+
+		attrs_t get_pool_count() const {
+			return base_t::get_pool_count();
 		}
 
 		attrs_t get_chunk_size_log2() const {
@@ -230,10 +234,6 @@ namespace cuw::mem {
 
 		void insert_back(ad_t* descr) {
 			base_t::insert_back(descr);
-		}
-
-		void adopt(raw_entry_t& another, int first_part) {
-			base_t::adopt(another, first_part);
 		}
 
 		void reset() {

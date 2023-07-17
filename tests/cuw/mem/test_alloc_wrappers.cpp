@@ -50,8 +50,8 @@ namespace {
 		ad_t descr{};
 	};
 
-	test_ad_t create_pool(mem::pool_chunk_size_t chunk_size, std::size_t size, void* data) {
-		return test_ad_t((attrs_t)mem::block_type_t::Pool, (attrs_t)chunk_size, mem::pool_chunk_size((attrs_t)chunk_size), size, data);
+	test_ad_t create_pool(attrs_t chunk_size_log2, std::size_t size, void* data) {
+		return test_ad_t((attrs_t)mem::block_type_t::Pool, chunk_size_log2, mem::value_to_pow2(chunk_size_log2), size, data);
 	}
 
 	template<attrs_t chunk_size_log2, attrs_t total_chunks>
@@ -63,8 +63,8 @@ namespace {
 
 		alignas(chunk_align) std::uint8_t data[total_size] = {};
 
-		test_ad_t test_ad = create_pool(chunk_enum, total_size, data);
-		mem::basic_pool_wrapper_t wrapper(test_ad, (attrs_t)chunk_enum, chunk_align);
+		test_ad_t test_ad = create_pool(chunk_size_log2, total_size, data);
+		mem::basic_pool_wrapper_t wrapper(test_ad, chunk_size_log2, chunk_align);
 
 		void* allocated[total_chunks] = {};
 
