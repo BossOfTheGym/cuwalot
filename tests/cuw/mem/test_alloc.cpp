@@ -18,9 +18,9 @@ const char* tick_label = "us";
 
 template<class malloc_func_t, class free_func_t>
 void test_random_stuff(bool deadbeef, malloc_func_t&& malloc_func, free_func_t&& free_func) {
-	constexpr int allocation_count = 1000000;
-	constexpr int allocation_size_min = (1 << 12) - 1;
-	constexpr int allocation_size_max = (1 << 12);
+	constexpr int allocation_count = 1 << 20;
+	constexpr int allocation_size_min = (1 << 14) - 1;
+	constexpr int allocation_size_max = (1 << 14);
 
 	int_gen_t cmd_gen{420};
 	int_gen_t size_gen{69};
@@ -62,7 +62,7 @@ void test_std_alloc(int k) {
 
 	std::cout << "*** testing stdalloc ***" << std::endl;
 	for (int i = 0; i < k; i++) {
-		test_random_stuff(true, std_malloc_func, std_free_func);
+		test_random_stuff(false, std_malloc_func, std_free_func);
 	}
 
 	std::cout << std::endl;
@@ -79,7 +79,7 @@ void test_cuw_alloc(int k) {
 
 	std::cout << "*** testing cuwalloc ***" << std::endl;
 	for (int i = 0; i < k; i++) {
-		test_random_stuff(true, cuw_malloc_func, cuw_free_func);
+		test_random_stuff(false, cuw_malloc_func, cuw_free_func);
 	}
 	std::cout << std::endl;
 }

@@ -300,6 +300,7 @@ namespace cuw::mem {
 			attrs_t pool_size = value_to_pow2(power);
 			attrs_t pool_capacity = std::clamp(pool_size >> chunk_size_log2, min_pool_chunks, max_pool_chunks);
 			pool_size = align_value<attrs_t>(pool_capacity << chunk_size_log2, base_t::get_page_size());
+			pool_capacity = std::clamp(pool_size >> chunk_size_log2, min_pool_chunks, max_pool_chunks);
 
 			void* pool_data = base_t::allocate(pool_size);
 			if (!pool_data) {
